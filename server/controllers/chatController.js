@@ -331,9 +331,10 @@ exports.sendMessage = async (req, res) => {
     if (messageType === 'meeting_invite') previewText = '📹 Video Meeting Invite';
 
     await db.query(
-      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, "message", ?, ?, ?)',
+      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, ?, ?, ?, ?)',
       [
         partnerId,
+        'message',
         `New message from @${req.user.username}`,
         previewText,
         JSON.stringify({ conversationId, messageId: newMsgId, senderId: userId })

@@ -79,9 +79,10 @@ exports.updatePermission = async (req, res) => {
 
     // Notify partner that permission was updated
     await db.query(
-      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, "call_permission", ?, ?, ?)',
+      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, ?, ?, ?, ?)',
       [
         targetUserId,
+        'call_permission',
         'Call Permission Updated',
         `@${req.user.username} updated call permissions with you (Audio: ${audioAllowed ? 'Allowed' : 'Off'}, Video: ${videoAllowed ? 'Allowed' : 'Off'})`,
         JSON.stringify({ fromUserId: userId, audioAllowed, videoAllowed, mutualAudio, mutualVideo })
@@ -108,9 +109,10 @@ exports.requestPermission = async (req, res) => {
     const { targetUserId, callType = 'video' } = req.body;
 
     await db.query(
-      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, "call_permission", ?, ?, ?)',
+      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, ?, ?, ?, ?)',
       [
         targetUserId,
+        'call_permission',
         `Call Permission Requested`,
         `@${req.user.username} wants to enable ${callType} calling with you. Grant permission to call.`,
         JSON.stringify({ requesterId: userId, callType })

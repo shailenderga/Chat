@@ -255,10 +255,10 @@ async function createMySQLTables() {
 
   // Safe migrations for existing messages table
   try {
-    await pool.query("ALTER TABLE messages ADD COLUMN is_deleted_for_everyone BOOLEAN DEFAULT FALSE");
+    await pool.query('ALTER TABLE messages ADD COLUMN is_deleted_for_everyone BOOLEAN DEFAULT FALSE');
   } catch (e) {}
   try {
-    await pool.query("ALTER TABLE messages ADD COLUMN deleted_for_users TEXT DEFAULT NULL");
+    await pool.query('ALTER TABLE messages ADD COLUMN deleted_for_users TEXT DEFAULT NULL');
   } catch (e) {}
 
   // Safe migrations for existing users table
@@ -278,19 +278,19 @@ async function seedDefaultAdmin() {
   const adminPass = '84249691@Sg';
   const hash = await bcrypt.hash(adminPass, 10);
 
-  const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [adminEmail]);
+  const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [adminEmail]);
   if (rows.length > 0) {
     await pool.query(
-      "UPDATE users SET password_hash = ?, role = 'admin' WHERE email = ?",
-      [hash, adminEmail]
+      'UPDATE users SET password_hash = ?, role = ? WHERE email = ?',
+      [hash, 'admin', adminEmail]
     );
     console.log(`✅ Updated Admin: ${adminEmail}`);
   } else {
-    const [oldRows] = await pool.query("SELECT * FROM users WHERE email = 'admin@chatapp.com' OR role = 'admin'");
+    const [oldRows] = await pool.query('SELECT * FROM users WHERE email = ? OR role = ?', ['admin@chatapp.com', 'admin']);
     if (oldRows.length > 0) {
       await pool.query(
-        "UPDATE users SET email = ?, password_hash = ?, role = 'admin' WHERE id = ?",
-        [adminEmail, hash, oldRows[0].id]
+        'UPDATE users SET email = ?, password_hash = ?, role = ? WHERE id = ?',
+        [adminEmail, hash, 'admin', oldRows[0].id]
       );
       console.log(`✅ Updated Admin Account to: ${adminEmail}`);
     } else {

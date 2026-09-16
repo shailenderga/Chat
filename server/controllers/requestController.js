@@ -36,15 +36,16 @@ exports.sendRequest = async (req, res) => {
     }
 
     const [result] = await db.query(
-      'INSERT INTO friend_requests (sender_id, receiver_id, status) VALUES (?, ?, "pending")',
-      [senderId, receiverId]
+      'INSERT INTO friend_requests (sender_id, receiver_id, status) VALUES (?, ?, ?)',
+      [senderId, receiverId, 'pending']
     );
 
     // Create a notification for the receiver
     await db.query(
-      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, "request", ?, ?, ?)',
+      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, ?, ?, ?, ?)',
       [
         receiverId,
+        'request',
         'New Friend Request',
         `@${req.user.username} (${req.user.name}) sent you a chat request`,
         JSON.stringify({ requestId: result.insertId, senderId })
@@ -103,16 +104,17 @@ exports.acceptRequest = async (req, res) => {
 
       // Seed initial welcoming message
       await db.query(
-        'INSERT INTO messages (conversation_id, sender_id, message_type, content) VALUES (?, ?, "text", ?)',
-        [conversationId, userId, "Hi! I accepted your request. Let's chat!"]
+        'INSERT INTO messages (conversation_id, sender_id, message_type, content) VALUES (?, ?, ?, ?)',
+        [conversationId, userId, 'text', "Hi! I accepted your request. Let's chat!"]
       );
     }
 
     // Notify sender that their request was accepted
     await db.query(
-      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, "request", ?, ?, ?)',
+      'INSERT INTO notifications (user_id, type, title, content, metadata) VALUES (?, ?, ?, ?, ?)',
       [
         request.sender_id,
+        'request',
         'Friend Request Accepted',
         `@${req.user.username} accepted your request! You can now chat and call.`,
         JSON.stringify({ conversationId, acceptedBy: userId })
