@@ -71,13 +71,6 @@ Open your browser at `http://localhost:3000`.
 ---
 
 ## 🔑 Default Accounts for Testing
-
-- **Super Admin Account**:
-  - Email: `admin@chatapp.com`
-  - Password: `admin123`
-  - Username: `@admin`
-  - *(Can view live chat spy and manage users)*
-
 - **Create Any Regular Users**:
   - Click "Create Account"
   - Enter Name, Unique `@username`, Email, and Password.
