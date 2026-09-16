@@ -43,40 +43,77 @@ function saveFallbackStore() {
 }
 
 async function initDB() {
-  const host = process.env.DB_HOST || 'localhost';
-  const user = process.env.DB_USER || 'root';
-  const password = process.env.DB_PASSWORD || '';
-  const port = process.env.DB_PORT || 3306;
-  const database = process.env.DB_NAME || 'chat_app';
+  let dbConfig = {};
+
+  if (process.env.DATABASE_URL || process.env.MYSQL_URI) {
+    try {
+      const uriStr = process.env.DATABASE_URL || process.env.MYSQL_URI;
+      const parsed = new URL(uriStr);
+      dbConfig = {
+        host: parsed.hostname,
+        port: Number(parsed.port) || 3306,
+        user: decodeURIComponent(parsed.username),
+        password: decodeURIComponent(parsed.password),
+        database: parsed.pathname.replace(/^\//, '') || 'defaultdb',
+        ssl: { rejectUnauthorized: false }
+      };
+    } catch (e) {
+      console.warn('Could not parse DATABASE_URL, falling back to standard env vars:', e.message);
+    }
+  }
+
+  if (!dbConfig.host) {
+    const host = process.env.DB_HOST || 'localhost';
+    const isCloud = host !== 'localhost' && host !== '127.0.0.1';
+    dbConfig = {
+      host,
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      port: Number(process.env.DB_PORT) || 3306,
+      database: process.env.DB_NAME || (isCloud ? 'defaultdb' : 'wavy'),
+      ssl: (isCloud || process.env.DB_SSL === 'true') ? { rejectUnauthorized: false } : undefined
+    };
+  }
 
   try {
-    // 1. Try to connect to MySQL server (without specifying DB to ensure DB can be created)
-    console.log(`Connecting to MySQL at ${host}:${port} as ${user}...`);
-    const rootConn = await mysql.createConnection({
-      host,
-      user,
-      password,
-      port: Number(port)
-    });
+    const isLocal = dbConfig.host === 'localhost' || dbConfig.host === '127.0.0.1';
 
-    await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${database}\`;`);
-    await rootConn.end();
+    // 1. For local installations, attempt database creation if needed
+    if (isLocal) {
+      try {
+        console.log(`Connecting to local MySQL at ${dbConfig.host}:${dbConfig.port} as ${dbConfig.user}...`);
+        const rootConn = await mysql.createConnection({
+          host: dbConfig.host,
+          user: dbConfig.user,
+          password: dbConfig.password,
+          port: dbConfig.port
+        });
+        await rootConn.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\`;`);
+        await rootConn.end();
+      } catch (err) {
+        console.warn('Local database pre-check warning:', err.message);
+      }
+    } else {
+      console.log(`Connecting to Cloud MySQL (Aiven) at ${dbConfig.host}:${dbConfig.port} (DB: ${dbConfig.database})...`);
+    }
 
-    // 2. Create pool with the database
+    // 2. Create connection pool with SSL support
     pool = mysql.createPool({
-      host,
-      user,
-      password,
-      port: Number(port),
-      database,
+      host: dbConfig.host,
+      user: dbConfig.user,
+      password: dbConfig.password,
+      port: dbConfig.port,
+      database: dbConfig.database,
+      ssl: dbConfig.ssl,
       waitForConnections: true,
-      connectionLimit: 15,
-      queueLimit: 0
+      connectionLimit: 10,
+      queueLimit: 0,
+      connectTimeout: 20000
     });
 
     // Test connection
     const connection = await pool.getConnection();
-    console.log(`Successfully connected to MySQL database: ${database}`);
+    console.log(`✅ Successfully connected to MySQL database: ${dbConfig.database}`);
     connection.release();
 
     // 3. Create tables
