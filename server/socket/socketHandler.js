@@ -35,6 +35,25 @@ module.exports = (io) => {
 
       // Broadcast user online status to all other users
       socket.broadcast.emit('user_status_change', { userId, status: 'online', last_seen: null });
+
+      // Auto-deliver any pending messages sent to this user
+      try {
+        const [convos] = await db.query(
+          'SELECT id FROM conversations WHERE user1_id = ? OR user2_id = ?',
+          [userId, userId]
+        );
+        if (convos && convos.length > 0) {
+          for (const c of convos) {
+            await db.query(
+              "UPDATE messages SET status = 'delivered' WHERE conversation_id = ? AND sender_id != ? AND status = 'sent'",
+              [c.id, userId]
+            );
+            io.to(`convo_${c.id}`).emit('messages_delivered', { conversationId: c.id, receiverId: userId });
+          }
+        }
+      } catch (err) {
+        console.warn('Auto deliver on register error:', err.message);
+      }
     });
 
     // 2. Join Conversation Room
@@ -49,6 +68,18 @@ module.exports = (io) => {
     // 3. Real-Time Chat Message
     socket.on('send_message', async (data) => {
       const { conversationId, message, partnerId, streakCount } = data;
+
+      // If partner is currently connected, ensure message is marked delivered
+      const partnerSockets = (partnerId && userSocketMap.get(partnerId)) || (partnerId && userSocketMap.get(Number(partnerId)));
+      const isPartnerConnected = Boolean(partnerSockets && partnerSockets.size > 0);
+
+      if (isPartnerConnected && message.status === 'sent') {
+        message.status = 'delivered';
+        try {
+          await db.query("UPDATE messages SET status = 'delivered' WHERE id = ?", [message.id]);
+        } catch (e) {}
+        socket.emit('message_status_update', { messageId: message.id, conversationId, status: 'delivered' });
+      }
 
       // Broadcast to room
       socket.to(`convo_${conversationId}`).emit('new_message', { conversationId, message, streakCount });
@@ -69,6 +100,19 @@ module.exports = (io) => {
         conversationId,
         message
       });
+    });
+
+    // Real-Time Message Read Status
+    socket.on('mark_read', async ({ conversationId, userId }) => {
+      try {
+        await db.query(
+          "UPDATE messages SET status = 'read' WHERE conversation_id = ? AND sender_id != ? AND status != 'read'",
+          [conversationId, userId]
+        );
+        io.to(`convo_${conversationId}`).emit('messages_read', { conversationId, readerId: userId });
+      } catch (err) {
+        console.warn('mark_read socket error:', err.message);
+      }
     });
 
     // Real-Time Message Deletion

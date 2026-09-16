@@ -32,6 +32,7 @@ router.get('/requests', verifyToken, requestController.getRequests);
 router.get('/chats/conversations', verifyToken, chatController.getConversations);
 router.get('/chats/:conversationId/messages', verifyToken, chatController.getMessages);
 router.post('/chats/:conversationId/messages', verifyToken, chatController.sendMessage);
+router.post('/chats/:conversationId/read', verifyToken, chatController.markMessagesRead);
 router.post('/chats/messages/:messageId/react', verifyToken, chatController.addReaction);
 router.delete('/chats/messages/:messageId', verifyToken, chatController.deleteMessage);
 router.post('/chats/upload', verifyToken, chatController.uploadMiddleware, chatController.uploadMedia);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Phone, Video, Lock, Paperclip, Send, Mic,
-  Flame, Clock, Smile, Image as ImageIcon, Check, Video as VideoIcon,
+  Flame, Clock, Smile, Image as ImageIcon, Check, CheckCheck, Video as VideoIcon,
   AlertCircle, ArrowLeft, Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -71,6 +71,7 @@ export default function ChatWindow({
     if (!conversation?.id) return;
 
     fetchMessages();
+    markMessagesAsRead();
 
     // Join conversation room in Socket
     if (socket) {
@@ -80,10 +81,29 @@ export default function ChatWindow({
         if (conversationId === conversation.id) {
           setMessages((prev) => [...prev, message]);
           playNotificationSound();
+          markMessagesAsRead();
           if (streakCount && onStreakUpdated) {
             onStreakUpdated(conversation.id, streakCount);
             playStreakSound();
           }
+        }
+      });
+
+      socket.on('messages_read', ({ conversationId }) => {
+        if (conversationId === conversation.id) {
+          setMessages((prev) => prev.map((m) => (m.sender_id === user?.id ? { ...m, status: 'read' } : m)));
+        }
+      });
+
+      socket.on('messages_delivered', ({ conversationId }) => {
+        if (!conversationId || conversationId === conversation.id) {
+          setMessages((prev) => prev.map((m) => (m.sender_id === user?.id && m.status === 'sent' ? { ...m, status: 'delivered' } : m)));
+        }
+      });
+
+      socket.on('message_status_update', ({ messageId, conversationId, status }) => {
+        if (conversationId === conversation.id) {
+          setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, status } : m)));
         }
       });
 
@@ -106,6 +126,9 @@ export default function ChatWindow({
       if (socket) {
         socket.emit('leave_conversation', conversation.id);
         socket.off('new_message');
+        socket.off('messages_read');
+        socket.off('messages_delivered');
+        socket.off('message_status_update');
         socket.off('message_deleted');
       }
       if (typingTimerRef.current) {
@@ -114,6 +137,21 @@ export default function ChatWindow({
       emitStopTyping(conversation.id, partner.id);
     };
   }, [conversation?.id, socket, partner.id, emitStopTyping]);
+
+  const markMessagesAsRead = async () => {
+    if (!conversation?.id || !token) return;
+    try {
+      await fetch(`/api/chats/${conversation.id}/read`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (socket) {
+        socket.emit('mark_read', { conversationId: conversation.id, userId: user?.id });
+      }
+    } catch (e) {
+      console.warn('Mark read error:', e);
+    }
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -583,9 +621,23 @@ export default function ChatWindow({
                   </div>
                 )}
 
-                {/* Timestamp */}
-                <div className={`text-[10px] font-mono mt-1 text-right opacity-70 ${isMe ? 'text-indigo-100' : 'text-slate-400'}`}>
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {/* Timestamp & Status Ticks */}
+                <div className={`flex items-center justify-end space-x-1 text-[10px] font-mono mt-1 ${isMe ? 'text-indigo-100/90' : 'text-slate-400'}`}>
+                  <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  {isMe && (
+                    <span
+                      className="inline-flex items-center ml-0.5"
+                      title={msg.status === 'read' ? 'Read' : msg.status === 'delivered' ? 'Delivered' : 'Sent'}
+                    >
+                      {msg.status === 'read' ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-sky-400 stroke-[2.5]" />
+                      ) : msg.status === 'delivered' ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-slate-300/80 stroke-[2]" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5 text-slate-300/70 stroke-[2]" />
+                      )}
+                    </span>
+                  )}
                 </div>
 
                 {/* Reactions list display */}

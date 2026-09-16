@@ -164,7 +164,7 @@ exports.getConversations = async (req, res) => {
 
       // Get last message
       const [lastMsgs] = await db.query(
-        'SELECT id, sender_id, message_type, content, file_url, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1',
+        'SELECT id, sender_id, message_type, content, file_url, status, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 1',
         [c.id]
       );
 
@@ -222,6 +222,16 @@ exports.getMessages = async (req, res) => {
       return res.status(403).json({ message: 'Access denied: not a member of this chat' });
     }
 
+    // Mark incoming messages as read
+    try {
+      await db.query(
+        "UPDATE messages SET status = 'read' WHERE conversation_id = ? AND sender_id != ? AND status != 'read'",
+        [conversationId, userId]
+      );
+    } catch (e) {
+      console.warn('Auto mark read warning:', e.message);
+    }
+
     const [messages] = await db.query(
       `SELECT m.*, u.name as sender_name, u.username as sender_username, u.avatar as sender_avatar
        FROM messages m
@@ -269,11 +279,22 @@ exports.sendMessage = async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized' });
     }
 
+    const partnerId = convo.user1_id === userId ? convo.user2_id : convo.user1_id;
+
+    // Check if partner is currently online to set initial status
+    let initialStatus = 'sent';
+    try {
+      const [partnerRows] = await db.query('SELECT status FROM users WHERE id = ?', [partnerId]);
+      if (partnerRows?.[0]?.status === 'online') {
+        initialStatus = 'delivered';
+      }
+    } catch (e) {}
+
     // Insert Message
     const [msgResult] = await db.query(
-      `INSERT INTO messages (conversation_id, sender_id, message_type, content, file_url, duration, is_ephemeral, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [conversationId, userId, messageType, content || '', fileUrl || null, duration, isEphemeral, expiresAt]
+      `INSERT INTO messages (conversation_id, sender_id, message_type, content, file_url, duration, is_ephemeral, expires_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [conversationId, userId, messageType, content || '', fileUrl || null, duration, isEphemeral, expiresAt, initialStatus]
     );
 
     const newMsgId = msgResult.insertId;
@@ -321,7 +342,6 @@ exports.sendMessage = async (req, res) => {
     );
 
     const messageData = createdMsg[0];
-    const partnerId = convo.user1_id === userId ? convo.user2_id : convo.user1_id;
 
     // Trigger Notification for the partner
     let previewText = content || 'Sent an attachment';
@@ -462,3 +482,22 @@ exports.deleteMessage = async (req, res) => {
     res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };
+
+// Explicitly mark all unread incoming messages in a conversation as read
+exports.markMessagesRead = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+
+    await db.query(
+      "UPDATE messages SET status = 'read' WHERE conversation_id = ? AND sender_id != ? AND status != 'read'",
+      [conversationId, userId]
+    );
+
+    res.json({ success: true, conversationId });
+  } catch (error) {
+    console.error('Mark read error:', error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+};
+

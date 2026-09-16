@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Flame, Clock, Phone, Video, ShieldCheck, UserPlus } from 'lucide-react';
+import { Search, Flame, Clock, Phone, Video, ShieldCheck, UserPlus, Check, CheckCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import StoryTray from './StoryTray';
 
@@ -10,6 +11,7 @@ export default function Sidebar({
   onOpenRequests,
   onInspectUser
 }) {
+  const { user } = useAuth();
   const { onlineUsers, typingUsers } = useSocket();
   const [search, setSearch] = useState('');
 
@@ -117,13 +119,26 @@ export default function Sidebar({
                         <span>typing...</span>
                       </p>
                     ) : (
-                      <p className="text-xs text-slate-400 truncate pr-2">
-                        {convo.lastMessage?.message_type === 'voice_note' ? '🎤 Voice note' :
-                         convo.lastMessage?.message_type === 'image' ? '📷 Photo' :
-                         convo.lastMessage?.message_type === 'video' ? '🎥 Video' :
-                         convo.lastMessage?.message_type === 'meeting_invite' ? '📹 Video Meeting' :
-                         convo.lastMessage?.content || `@${partner.username}`}
-                      </p>
+                      <div className="flex items-center space-x-1 truncate pr-2">
+                        {convo.lastMessage && convo.lastMessage.sender_id === user?.id && (
+                          <span className="flex-shrink-0" title={convo.lastMessage.status === 'read' ? 'Read' : convo.lastMessage.status === 'delivered' ? 'Delivered' : 'Sent'}>
+                            {convo.lastMessage.status === 'read' ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-sky-400 stroke-[2.5]" />
+                            ) : convo.lastMessage.status === 'delivered' ? (
+                              <CheckCheck className="w-3.5 h-3.5 text-slate-400 stroke-[2]" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5 text-slate-500 stroke-[2]" />
+                            )}
+                          </span>
+                        )}
+                        <p className="text-xs text-slate-400 truncate">
+                          {convo.lastMessage?.message_type === 'voice_note' ? '🎤 Voice note' :
+                           convo.lastMessage?.message_type === 'image' ? '📷 Photo' :
+                           convo.lastMessage?.message_type === 'video' ? '🎥 Video' :
+                           convo.lastMessage?.message_type === 'meeting_invite' ? '📹 Video Meeting' :
+                           convo.lastMessage?.content || `@${partner.username}`}
+                        </p>
+                      </div>
                     )}
 
                     {/* Snapchat Streak Badge */}

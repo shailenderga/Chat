@@ -8,4 +8,5 @@ server/uploads/*
 !server/uploads/.gitkeep
 .DS_Store
 *.log
+server/data_store.json
 

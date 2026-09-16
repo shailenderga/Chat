@@ -198,6 +198,7 @@ async function createMySQLTables() {
       is_ephemeral BOOLEAN DEFAULT FALSE,
       expires_at TIMESTAMP NULL DEFAULT NULL,
       reactions TEXT DEFAULT NULL,
+      status ENUM('sent', 'delivered', 'read') DEFAULT 'sent',
       is_deleted_for_everyone BOOLEAN DEFAULT FALSE,
       deleted_for_users TEXT DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -254,6 +255,9 @@ async function createMySQLTables() {
   }
 
   // Safe migrations for existing messages table
+  try {
+    await pool.query("ALTER TABLE messages ADD COLUMN status ENUM('sent', 'delivered', 'read') DEFAULT 'sent'");
+  } catch (e) {}
   try {
     await pool.query('ALTER TABLE messages ADD COLUMN is_deleted_for_everyone BOOLEAN DEFAULT FALSE');
   } catch (e) {}
@@ -531,6 +535,7 @@ function handleFallbackQuery(sql, params) {
         duration: params[5] || 0,
         is_ephemeral: params[6] || false,
         expires_at: params[7] || null,
+        status: params[8] || 'sent',
         reactions: null,
         created_at: new Date().toISOString()
       };
@@ -653,6 +658,40 @@ function handleFallbackQuery(sql, params) {
       }
       saveFallbackStore();
       return [{ affectedRows: msg ? 1 : 0 }, null];
+    }
+
+    if (sql.includes('messages SET status =')) {
+      let affected = 0;
+      const isParamStatus = sql.includes('status = ?');
+      const newStatus = isParamStatus ? params[0] : (sql.includes("'read'") ? 'read' : sql.includes("'delivered'") ? 'delivered' : 'sent');
+
+      if (sql.includes('WHERE conversation_id = ? AND sender_id != ?')) {
+        const convoId = isParamStatus ? params[1] : params[0];
+        const excludeSender = isParamStatus ? params[2] : params[1];
+        fallbackStore.messages.forEach(m => {
+          if (m.conversation_id === convoId && m.sender_id !== excludeSender) {
+            m.status = newStatus;
+            affected++;
+          }
+        });
+      } else if (sql.includes('WHERE id = ?')) {
+        const msgId = isParamStatus ? params[1] : params[0];
+        const msg = fallbackStore.messages.find(m => m.id === msgId);
+        if (msg) {
+          msg.status = newStatus;
+          affected = 1;
+        }
+      } else if (sql.includes('sender_id != ?')) {
+        const excludeSender = isParamStatus ? params[params.length - 1] : params[0];
+        fallbackStore.messages.forEach(m => {
+          if (m.sender_id !== excludeSender && m.status === 'sent') {
+            m.status = newStatus;
+            affected++;
+          }
+        });
+      }
+      saveFallbackStore();
+      return [{ affectedRows: affected }, null];
     }
 
     saveFallbackStore();
