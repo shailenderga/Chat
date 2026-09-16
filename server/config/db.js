@@ -6,9 +6,12 @@ require('dotenv').config();
 
 let pool = null;
 let isFallback = false;
+const os = require('os');
 
 // Fallback in-memory / JSON store in case MySQL credentials fail or service is locked
-const fallbackDataPath = path.join(__dirname, '..', 'data_store.json');
+const fallbackDataPath = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'data_store.json')
+  : path.join(__dirname, '..', 'data_store.json');
 let fallbackStore = {
   users: [],
   friend_requests: [],

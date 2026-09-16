@@ -94,7 +94,15 @@ export default function ChatWindow({
       });
     }
 
+    // Fallback polling for Serverless environments (Vercel) when socket is not active
+    const pollInterval = setInterval(() => {
+      if (!socket || !socket.connected) {
+        fetchMessages();
+      }
+    }, 3000);
+
     return () => {
+      clearInterval(pollInterval);
       if (socket) {
         socket.emit('leave_conversation', conversation.id);
         socket.off('new_message');

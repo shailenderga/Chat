@@ -64,6 +64,11 @@ export default function App() {
     if (!token) return;
     fetchConversations();
     fetchPendingRequestsCount();
+
+    const interval = setInterval(() => {
+      fetchPendingRequestsCount();
+    }, 8000);
+    return () => clearInterval(interval);
   }, [token]);
 
   const fetchConversations = async () => {

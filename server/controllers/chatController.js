@@ -2,11 +2,16 @@ const db = require('../config/db');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const os = require('os');
 
-// Ensure uploads folder exists
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Ensure uploads folder exists (use /tmp on Vercel serverless)
+const uploadDir = process.env.VERCEL ? path.join(os.tmpdir(), 'uploads') : path.join(__dirname, '..', 'uploads');
+try {
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Upload directory check warning:', e.message);
 }
 
 // Multer storage

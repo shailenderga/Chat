@@ -22,8 +22,11 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+const os = require('os');
+const uploadsPath = process.env.VERCEL ? path.join(os.tmpdir(), 'uploads') : path.join(__dirname, 'uploads');
+
 // Static uploads folder with media headers for seamless streaming and seeking
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+app.use('/uploads', express.static(uploadsPath, {
   setHeaders: (res, filePath) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -50,15 +53,26 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   }
 }));
 
+// Ensure Database is initialized on Serverless requests
+let dbInitPromise = null;
+app.use(async (req, res, next) => {
+  if (!dbInitPromise) {
+    dbInitPromise = initDB().catch(err => console.error('DB init error:', err));
+  }
+  await dbInitPromise;
+  next();
+});
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
-// API Routes
+// API Routes (mount both on /api and root / for Vercel serverless compatibility)
 app.use('/api', apiRoutes);
+app.use('/', apiRoutes);
 
-// Socket.io setup
+// Socket.io setup (for persistent Node server runtime)
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -94,6 +108,12 @@ async function startServer() {
   });
 }
 
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-});
+// Start standalone server only when not running inside Vercel serverless lambda
+if (!process.env.VERCEL) {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+  });
+}
+
+// Export express app for Vercel Serverless Function entrypoint
+module.exports = app;
