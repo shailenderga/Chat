@@ -19,6 +19,8 @@ router.get('/auth/me', verifyToken, authController.getMe);
 router.put('/auth/profile', verifyToken, authController.updateProfile);
 router.get('/users/search', verifyToken, authController.searchUsers);
 router.get('/users/:userId/profile', verifyToken, authController.getUserProfile);
+router.post('/users/heartbeat', verifyToken, authController.heartbeat);
+router.get('/users/online', verifyToken, authController.getOnlineUsers);
 
 // --- Friend Request Routes ---
 router.post('/requests/send', verifyToken, requestController.sendRequest);

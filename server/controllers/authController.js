@@ -331,3 +331,27 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };
+
+// User Heartbeat (keeps user marked as online in DB)
+exports.heartbeat = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['online', userId]);
+    res.json({ status: 'ok' });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};
+
+// Get all currently active online users (pinged within last 30s)
+exports.getOnlineUsers = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT id FROM users WHERE status = 'online' AND last_seen >= (CURRENT_TIMESTAMP - INTERVAL 30 SECOND) AND is_banned = FALSE"
+    );
+    const onlineIds = (rows || []).map(r => r.id);
+    res.json(onlineIds);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};

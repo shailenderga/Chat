@@ -173,6 +173,52 @@ export const SocketProvider = ({ children }) => {
     }
   }, [socket, user]);
 
+  // Heartbeat & Online Status Fallback (ensures online status works in serverless environments)
+  useEffect(() => {
+    if (!user) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        const token = localStorage.getItem('wavy_token');
+        if (!token) return;
+        await fetch('/api/users/heartbeat', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {}
+    };
+
+    const fetchOnlineUsers = async () => {
+      try {
+        const token = localStorage.getItem('wavy_token');
+        if (!token) return;
+        const res = await fetch('/api/users/online', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const ids = await res.json();
+          if (Array.isArray(ids)) {
+            setOnlineUsers((prev) => {
+              const combined = new Set([...prev, ...ids]);
+              return combined;
+            });
+          }
+        }
+      } catch (e) {}
+    };
+
+    sendHeartbeat();
+    fetchOnlineUsers();
+
+    const heartbeatInterval = setInterval(sendHeartbeat, 15000);
+    const onlineInterval = setInterval(fetchOnlineUsers, 8000);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      clearInterval(onlineInterval);
+    };
+  }, [user]);
+
   const clearToast = () => setActiveToast(null);
 
   return (
