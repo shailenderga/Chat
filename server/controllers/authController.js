@@ -121,7 +121,7 @@ exports.login = async (req, res) => {
     }
 
     // Update status to online
-    await db.query('UPDATE users SET status = "online", last_seen = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+    await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['online', user.id]);
 
     const token = generateToken(user);
 
@@ -285,7 +285,7 @@ exports.getUserProfile = async (req, res) => {
 
     // Check streak if conversation exists
     const [convos] = await db.query(
-      'SELECT streak_count, last_message_date FROM conversations WHERE (user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)',
+      'SELECT streak_count FROM conversations WHERE (user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?)',
       [currentUserId, userId, userId, currentUserId]
     );
     const streakCount = convos?.[0]?.streak_count || 0;

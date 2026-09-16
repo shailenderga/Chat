@@ -83,7 +83,7 @@ exports.acceptRequest = async (req, res) => {
     }
 
     // Update status to accepted
-    await db.query('UPDATE friend_requests SET status = "accepted" WHERE id = ?', [requestId]);
+    await db.query('UPDATE friend_requests SET status = ? WHERE id = ?', ['accepted', requestId]);
 
     // Check or create conversation
     const [existingConvo] = await db.query(
@@ -144,7 +144,7 @@ exports.rejectRequest = async (req, res) => {
       return res.status(404).json({ message: 'Friend request not found' });
     }
 
-    await db.query('UPDATE friend_requests SET status = "rejected" WHERE id = ?', [requestId]);
+    await db.query('UPDATE friend_requests SET status = ? WHERE id = ?', ['rejected', requestId]);
 
     res.json({ message: 'Friend request declined' });
   } catch (error) {

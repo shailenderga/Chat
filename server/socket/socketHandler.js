@@ -28,7 +28,7 @@ module.exports = (io) => {
       }
 
       // Update online status in DB
-      await db.query('UPDATE users SET status = "online", last_seen = CURRENT_TIMESTAMP WHERE id = ?', [userId]);
+      await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['online', userId]);
 
       // Send initial list of currently online users to this socket
       socket.emit('initial_online_users', Array.from(userSocketMap.keys()));
@@ -210,7 +210,7 @@ module.exports = (io) => {
             userSocketMap.delete(user.id);
             // Update offline in DB
             const lastSeenIso = new Date().toISOString();
-            await db.query('UPDATE users SET status = "offline", last_seen = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+            await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['offline', user.id]);
             io.emit('user_status_change', { userId: user.id, status: 'offline', last_seen: lastSeenIso });
           }
         }

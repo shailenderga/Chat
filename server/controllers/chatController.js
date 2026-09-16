@@ -414,8 +414,8 @@ exports.deleteMessage = async (req, res) => {
       }
 
       await db.query(
-        'UPDATE messages SET is_deleted_for_everyone = TRUE, content = "🚫 This message was deleted", file_url = NULL WHERE id = ?',
-        [messageId]
+        'UPDATE messages SET is_deleted_for_everyone = TRUE, content = ?, file_url = NULL WHERE id = ?',
+        ['🚫 This message was deleted', messageId]
       );
 
       // Clean up uploaded file if present
