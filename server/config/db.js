@@ -147,6 +147,8 @@ async function createMySQLTables() {
       last_seen_privacy ENUM('everyone', 'friends', 'nobody') DEFAULT 'everyone',
       story_privacy ENUM('everyone', 'friends', 'nobody') DEFAULT 'everyone',
       chat_wallpaper VARCHAR(255) DEFAULT 'default',
+      reset_code VARCHAR(10) DEFAULT NULL,
+      reset_expires TIMESTAMP NULL DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );`,
 
@@ -274,6 +276,12 @@ async function createMySQLTables() {
   } catch (e) {}
   try {
     await pool.query("ALTER TABLE users ADD COLUMN chat_wallpaper VARCHAR(255) DEFAULT 'default'");
+  } catch (e) {}
+  try {
+    await pool.query('ALTER TABLE users ADD COLUMN reset_code VARCHAR(10) DEFAULT NULL');
+  } catch (e) {}
+  try {
+    await pool.query('ALTER TABLE users ADD COLUMN reset_expires TIMESTAMP NULL DEFAULT NULL');
   } catch (e) {}
 }
 
@@ -489,6 +497,8 @@ function handleFallbackQuery(sql, params) {
         is_banned: false,
         status: 'offline',
         last_seen: new Date().toISOString(),
+        reset_code: null,
+        reset_expires: null,
         created_at: new Date().toISOString()
       };
       fallbackStore.users.push(newUser);
@@ -628,6 +638,28 @@ function handleFallbackQuery(sql, params) {
     if (sql.includes('users SET is_banned = ? WHERE id = ?')) {
       const u = fallbackStore.users.find(usr => usr.id === params[1]);
       if (u) u.is_banned = Boolean(params[0]);
+      saveFallbackStore();
+      return [{ affectedRows: u ? 1 : 0 }, null];
+    }
+
+    if (sql.includes('users SET reset_code =')) {
+      const u = fallbackStore.users.find(usr => usr.id === params[params.length - 1] || usr.email.toLowerCase() === String(params[params.length - 1]).toLowerCase());
+      if (u) {
+        u.reset_code = params[0];
+        u.reset_expires = params[1] || new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      }
+      saveFallbackStore();
+      return [{ affectedRows: u ? 1 : 0 }, null];
+    }
+
+    if (sql.includes('users SET password_hash =')) {
+      const targetVal = params[params.length - 1];
+      const u = fallbackStore.users.find(usr => usr.id === targetVal || usr.email.toLowerCase() === String(targetVal).toLowerCase());
+      if (u) {
+        u.password_hash = params[0];
+        u.reset_code = null;
+        u.reset_expires = null;
+      }
       saveFallbackStore();
       return [{ affectedRows: u ? 1 : 0 }, null];
     }

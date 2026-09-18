@@ -355,3 +355,102 @@ exports.getOnlineUsers = async (req, res) => {
     res.status(500).json({ message: e.message });
   }
 };
+
+// Request Password Reset Code
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: 'Please enter your registered email address' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const [users] = await db.query('SELECT id, name, email, username FROM users WHERE email = ?', [cleanEmail]);
+
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: 'No account found with this email address' });
+    }
+
+    const user = users[0];
+
+    // Generate 6-digit numeric OTP code
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    // Store in database
+    await db.query(
+      'UPDATE users SET reset_code = ?, reset_expires = ? WHERE id = ?',
+      [resetCode, expiresAt, user.id]
+    );
+
+    console.log(`🔐 Password reset code generated for ${cleanEmail}: ${resetCode}`);
+
+    return res.json({
+      message: 'Verification code generated successfully',
+      email: cleanEmail,
+      code: resetCode
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+};
+
+// Reset Password with Code
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ message: 'Please provide email, verification code, and new password' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCode = String(code).trim();
+
+    const [users] = await db.query(
+      'SELECT id, email, reset_code, reset_expires FROM users WHERE email = ?',
+      [cleanEmail]
+    );
+
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = users[0];
+
+    if (!user.reset_code || String(user.reset_code).trim() !== cleanCode) {
+      return res.status(400).json({ message: 'Invalid verification code. Please check and try again.' });
+    }
+
+    if (user.reset_expires) {
+      const expiry = new Date(user.reset_expires);
+      if (expiry < new Date()) {
+        return res.status(400).json({ message: 'Verification code has expired. Please request a new code.' });
+      }
+    }
+
+    // Hash the new password with bcrypt
+    const newHash = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear reset fields
+    await db.query(
+      'UPDATE users SET password_hash = ?, reset_code = NULL, reset_expires = NULL WHERE id = ?',
+      [newHash, user.id]
+    );
+
+    console.log(`✅ Password successfully reset for user ${cleanEmail}`);
+
+    return res.json({
+      message: 'Password has been reset successfully! You can now sign in with your new password.'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+};
+

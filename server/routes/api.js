@@ -14,6 +14,8 @@ const notificationController = require('../controllers/notificationController');
 // --- Auth Routes ---
 router.post('/auth/register', authController.register);
 router.post('/auth/login', authController.login);
+router.post('/auth/forgot-password', authController.forgotPassword);
+router.post('/auth/reset-password', authController.resetPassword);
 router.get('/auth/check-username/:username', authController.checkUsername);
 router.get('/auth/me', verifyToken, authController.getMe);
 router.put('/auth/profile', verifyToken, authController.updateProfile);
