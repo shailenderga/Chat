@@ -28,8 +28,14 @@ export const SocketProvider = ({ children }) => {
       return;
     }
 
-    // Connect to server
-    const socketUrl = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000' : window.location.origin);
+    // Connect to server (supports localhost, 127.0.0.1, custom Vite ports, and cloud origin)
+    const isLocalDev = window.location.hostname === 'localhost' ||
+                       window.location.hostname === '127.0.0.1' ||
+                       window.location.port === '5173' ||
+                       window.location.port === '3000';
+    const socketUrl = import.meta.env.VITE_API_URL ||
+                      (isLocalDev ? `${window.location.protocol}//${window.location.hostname}:5000` : window.location.origin);
+
     const newSocket = io(socketUrl, {
       transports: ['websocket', 'polling']
     });
@@ -42,7 +48,13 @@ export const SocketProvider = ({ children }) => {
     // 1. Initial Online Users List
     newSocket.on('initial_online_users', (userIds) => {
       if (Array.isArray(userIds)) {
-        setOnlineUsers(new Set(userIds));
+        const idSet = new Set();
+        userIds.forEach(id => {
+          idSet.add(id);
+          idSet.add(Number(id));
+          idSet.add(String(id));
+        });
+        setOnlineUsers(idSet);
       }
     });
 
@@ -50,15 +62,24 @@ export const SocketProvider = ({ children }) => {
     newSocket.on('user_status_change', ({ userId, status, last_seen }) => {
       setOnlineUsers((prev) => {
         const next = new Set(prev);
-        if (status === 'online') next.add(userId);
-        else next.delete(userId);
+        if (status === 'online') {
+          next.add(userId);
+          next.add(Number(userId));
+          next.add(String(userId));
+        } else {
+          next.delete(userId);
+          next.delete(Number(userId));
+          next.delete(String(userId));
+        }
         return next;
       });
 
       if (last_seen) {
         setUserLastSeen((prev) => ({
           ...prev,
-          [userId]: last_seen
+          [userId]: last_seen,
+          [Number(userId)]: last_seen,
+          [String(userId)]: last_seen
         }));
       }
     });
@@ -199,7 +220,12 @@ export const SocketProvider = ({ children }) => {
           const ids = await res.json();
           if (Array.isArray(ids)) {
             setOnlineUsers((prev) => {
-              const combined = new Set([...prev, ...ids]);
+              const combined = new Set(prev);
+              ids.forEach(id => {
+                combined.add(id);
+                combined.add(Number(id));
+                combined.add(String(id));
+              });
               return combined;
             });
           }

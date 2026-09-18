@@ -427,26 +427,51 @@ function handleFallbackQuery(sql, params) {
     }
 
     if (sql.includes('FROM friend_requests')) {
-      let results = [...fallbackStore.friend_requests];
+      let results = [...(fallbackStore.friend_requests || [])];
       if (sql.includes('WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)')) {
         results = results.filter(r => 
-          (r.sender_id === params[0] && r.receiver_id === params[1]) ||
-          (r.sender_id === params[2] && r.receiver_id === params[3])
+          (Number(r.sender_id) === Number(params[0]) && Number(r.receiver_id) === Number(params[1])) ||
+          (Number(r.sender_id) === Number(params[2]) && Number(r.receiver_id) === Number(params[3]))
         );
-      } else if (sql.includes('WHERE receiver_id = ? AND status = ?')) {
-        results = results.filter(r => r.receiver_id === params[0] && r.status === params[1]);
+      } else if (sql.includes('fr.receiver_id = ?') || (sql.includes('receiver_id = ?') && sql.includes('status ='))) {
+        const targetStatus = sql.includes("'pending'") ? 'pending' : (params[1] || 'pending');
+        results = results.filter(r => Number(r.receiver_id) === Number(params[0]) && r.status === targetStatus).map(r => {
+          const sender = (fallbackStore.users || []).find(u => Number(u.id) === Number(r.sender_id)) || {};
+          return {
+            ...r,
+            sender_name: sender.name || 'User',
+            sender_username: sender.username || 'user',
+            sender_avatar: sender.avatar || '',
+            sender_bio: sender.bio || ''
+          };
+        });
+      } else if (sql.includes('fr.sender_id = ?') || (sql.includes('sender_id = ?') && sql.includes('status ='))) {
+        const targetStatus = sql.includes("'pending'") ? 'pending' : (params[1] || 'pending');
+        results = results.filter(r => Number(r.sender_id) === Number(params[0]) && r.status === targetStatus).map(r => {
+          const receiver = (fallbackStore.users || []).find(u => Number(u.id) === Number(r.receiver_id)) || {};
+          return {
+            ...r,
+            receiver_name: receiver.name || 'User',
+            receiver_username: receiver.username || 'user',
+            receiver_avatar: receiver.avatar || ''
+          };
+        });
+      } else if (sql.includes('WHERE id = ? AND receiver_id = ?')) {
+        results = results.filter(r => Number(r.id) === Number(params[0]) && Number(r.receiver_id) === Number(params[1]));
       } else if (sql.includes('WHERE sender_id = ?')) {
-        results = results.filter(r => r.sender_id === params[0]);
+        results = results.filter(r => Number(r.sender_id) === Number(params[0]));
+      } else if (sql.includes('WHERE receiver_id = ?')) {
+        results = results.filter(r => Number(r.receiver_id) === Number(params[0]));
       } else if (sql.includes('WHERE id = ?')) {
-        results = results.filter(r => r.id === params[0]);
+        results = results.filter(r => Number(r.id) === Number(params[0]));
       }
       return [results, null];
     }
 
     if (sql.includes('FROM call_permissions')) {
-      let results = [...fallbackStore.call_permissions];
+      let results = [...(fallbackStore.call_permissions || [])];
       if (sql.includes('WHERE user_id = ? AND target_user_id = ?')) {
-        results = results.filter(p => p.user_id === params[0] && p.target_user_id === params[1]);
+        results = results.filter(p => Number(p.user_id) === Number(params[0]) && Number(p.target_user_id) === Number(params[1]));
       }
       return [results, null];
     }
@@ -657,13 +682,51 @@ function handleFallbackQuery(sql, params) {
       return [{ insertId: genId, affectedRows: 1 }, null];
     }
 
+    if (sql.includes('INTO call_permissions')) {
+      if (!fallbackStore.call_permissions) fallbackStore.call_permissions = [];
+      const perm = {
+        id: genId,
+        user_id: params[0],
+        target_user_id: params[1],
+        audio_allowed: Boolean(params[2]),
+        video_allowed: Boolean(params[3]),
+        created_at: new Date().toISOString()
+      };
+      fallbackStore.call_permissions.push(perm);
+      saveFallbackStore();
+      return [{ insertId: genId, affectedRows: 1 }, null];
+    }
+
     saveFallbackStore();
     return [{ insertId: genId, affectedRows: 1 }, null];
   }
 
   if (trimmed.startsWith('UPDATE')) {
+    if (sql.includes('call_permissions SET audio_allowed =')) {
+      if (!fallbackStore.call_permissions) fallbackStore.call_permissions = [];
+      let perm = fallbackStore.call_permissions.find(p => 
+        Number(p.user_id) === Number(params[2]) && Number(p.target_user_id) === Number(params[3])
+      );
+      if (perm) {
+        perm.audio_allowed = Boolean(params[0]);
+        perm.video_allowed = Boolean(params[1]);
+      } else {
+        perm = {
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          user_id: params[2],
+          target_user_id: params[3],
+          audio_allowed: Boolean(params[0]),
+          video_allowed: Boolean(params[1]),
+          created_at: new Date().toISOString()
+        };
+        fallbackStore.call_permissions.push(perm);
+      }
+      saveFallbackStore();
+      return [{ affectedRows: 1 }, null];
+    }
+
     if (sql.includes('friend_requests SET status = ? WHERE id = ?')) {
-      const req = fallbackStore.friend_requests.find(r => r.id === params[1]);
+      const req = fallbackStore.friend_requests.find(r => Number(r.id) === Number(params[1]));
       if (req) req.status = params[0];
       saveFallbackStore();
       return [{ affectedRows: req ? 1 : 0 }, null];

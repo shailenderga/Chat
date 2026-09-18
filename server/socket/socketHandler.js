@@ -13,15 +13,17 @@ module.exports = (io) => {
     socket.on('register_user', async (user) => {
       if (!user || !user.id) return;
       const userId = user.id;
+      const numId = Number(userId);
 
-      if (!userSocketMap.has(userId)) {
-        userSocketMap.set(userId, new Set());
+      if (!userSocketMap.has(numId)) {
+        userSocketMap.set(numId, new Set());
       }
-      userSocketMap.get(userId).add(socket.id);
+      userSocketMap.get(numId).add(socket.id);
       socketUserMap.set(socket.id, user);
 
-      // Join personal room for private notifications
+      // Join personal room for private notifications (both string and number)
       socket.join(`user_${userId}`);
+      socket.join(`user_${numId}`);
 
       if (user.role === 'admin') {
         socket.join('admin_channel');
@@ -84,9 +86,15 @@ module.exports = (io) => {
       // Broadcast to room
       socket.to(`convo_${conversationId}`).emit('new_message', { conversationId, message, streakCount });
 
+      // Helper to emit to a user's personal room safely (supports both number and string IDs)
+      const emitToUser = (targetUserId, event, data) => {
+        if (!targetUserId) return;
+        io.to(`user_${targetUserId}`).to(`user_${Number(targetUserId)}`).emit(event, data);
+      };
+
       // If partner is not currently looking at the chat room, notify them directly
       if (partnerId) {
-        io.to(`user_${partnerId}`).emit('incoming_notification', {
+        emitToUser(partnerId, 'incoming_notification', {
           type: 'message',
           title: `New message from @${message.sender_username}`,
           content: message.content || (message.message_type === 'voice_note' ? '🎤 Voice note' : 'Attachment'),
@@ -124,20 +132,20 @@ module.exports = (io) => {
     socket.on('typing', ({ conversationId, userId, username, partnerId }) => {
       socket.to(`convo_${conversationId}`).emit('user_typing', { conversationId, userId, username });
       if (partnerId) {
-        io.to(`user_${partnerId}`).emit('user_typing', { conversationId, userId, username });
+        io.to(`user_${partnerId}`).to(`user_${Number(partnerId)}`).emit('user_typing', { conversationId, userId, username });
       }
     });
 
     socket.on('stop_typing', ({ conversationId, userId, partnerId }) => {
       socket.to(`convo_${conversationId}`).emit('user_stop_typing', { conversationId, userId });
       if (partnerId) {
-        io.to(`user_${partnerId}`).emit('user_stop_typing', { conversationId, userId });
+        io.to(`user_${partnerId}`).to(`user_${Number(partnerId)}`).emit('user_stop_typing', { conversationId, userId });
       }
     });
 
     // 5. 1-on-1 Call Signaling (WebRTC)
     socket.on('call_user', ({ toUserId, signalData, callType, fromUser, conversationId }) => {
-      io.to(`user_${toUserId}`).emit('incoming_call', {
+      io.to(`user_${toUserId}`).to(`user_${Number(toUserId)}`).emit('incoming_call', {
         signal: signalData,
         from: fromUser,
         callType, // 'audio' or 'video'
@@ -146,19 +154,19 @@ module.exports = (io) => {
     });
 
     socket.on('answer_call', ({ toUserId, signalData }) => {
-      io.to(`user_${toUserId}`).emit('call_accepted', { signal: signalData });
+      io.to(`user_${toUserId}`).to(`user_${Number(toUserId)}`).emit('call_accepted', { signal: signalData });
     });
 
     socket.on('reject_call', ({ toUserId }) => {
-      io.to(`user_${toUserId}`).emit('call_rejected');
+      io.to(`user_${toUserId}`).to(`user_${Number(toUserId)}`).emit('call_rejected');
     });
 
     socket.on('end_call', ({ toUserId }) => {
-      io.to(`user_${toUserId}`).emit('call_ended');
+      io.to(`user_${toUserId}`).to(`user_${Number(toUserId)}`).emit('call_ended');
     });
 
     socket.on('call_ice_candidate', ({ toUserId, candidate }) => {
-      io.to(`user_${toUserId}`).emit('call_ice_candidate', { candidate });
+      io.to(`user_${toUserId}`).to(`user_${Number(toUserId)}`).emit('call_ice_candidate', { candidate });
     });
 
     // 6. Zoom-Style Meeting Rooms
@@ -194,7 +202,7 @@ module.exports = (io) => {
 
     // Host admission control / waiting room
     socket.on('request_meeting_admission', ({ roomId, hostId, user }) => {
-      io.to(`user_${hostId}`).emit('guest_requesting_admission', { roomId, user, socketId: socket.id });
+      io.to(`user_${hostId}`).to(`user_${Number(hostId)}`).emit('guest_requesting_admission', { roomId, user, socketId: socket.id });
     });
 
     socket.on('host_admit_guest', ({ guestSocketId, roomId }) => {
@@ -247,15 +255,17 @@ module.exports = (io) => {
       socketUserMap.delete(socket.id);
 
       if (user && user.id) {
-        const sockets = userSocketMap.get(user.id);
+        const numId = Number(user.id);
+        const sockets = userSocketMap.get(numId) || userSocketMap.get(user.id);
         if (sockets) {
           sockets.delete(socket.id);
           if (sockets.size === 0) {
+            userSocketMap.delete(numId);
             userSocketMap.delete(user.id);
             // Update offline in DB
             const lastSeenIso = new Date().toISOString();
-            await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['offline', user.id]);
-            io.emit('user_status_change', { userId: user.id, status: 'offline', last_seen: lastSeenIso });
+            await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['offline', numId]);
+            io.emit('user_status_change', { userId: numId, status: 'offline', last_seen: lastSeenIso });
           }
         }
       }
