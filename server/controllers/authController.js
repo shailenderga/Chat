@@ -133,20 +133,25 @@ exports.register = async (req, res) => {
   }
 };
 
-// Login with Email + Password
+// Login with Email OR Username + Password
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Please enter your email and password' });
+      return res.status(400).json({ message: 'Please enter your email or username, and your password' });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const [users] = await db.query('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+    const rawInput = email.trim().toLowerCase();
+    const cleanUsername = rawInput.replace(/^@/, '');
+
+    const [users] = await db.query(
+      'SELECT * FROM users WHERE email = ? OR username = ?',
+      [rawInput, cleanUsername]
+    );
 
     if (!users || users.length === 0) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid email/username or password' });
     }
 
     const user = users[0];
@@ -434,17 +439,23 @@ exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !email.trim()) {
-      return res.status(400).json({ message: 'Please enter your registered email address' });
+      return res.status(400).json({ message: 'Please enter your registered email address or username' });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const [users] = await db.query('SELECT id, name, email, username FROM users WHERE email = ?', [cleanEmail]);
+    const rawInput = email.trim().toLowerCase();
+    const cleanUsername = rawInput.replace(/^@/, '');
+
+    const [users] = await db.query(
+      'SELECT id, name, email, username FROM users WHERE email = ? OR username = ?',
+      [rawInput, cleanUsername]
+    );
 
     if (!users || users.length === 0) {
-      return res.status(404).json({ message: 'No account found with this email address' });
+      return res.status(404).json({ message: 'No registered user found with this email or username' });
     }
 
     const user = users[0];
+    const cleanEmail = user.email;
 
     // Generate 6-digit numeric OTP code
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();

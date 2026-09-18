@@ -2,7 +2,10 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
+const dotenv = require('dotenv');
+dotenv.config();
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 let pool = null;
 let isFallback = false;
@@ -399,7 +402,14 @@ function handleFallbackQuery(sql, params) {
     // Basic table parser
     if (sql.includes('FROM users')) {
       let results = [...fallbackStore.users];
-      if (sql.includes('WHERE email = ?')) {
+      if (sql.includes('WHERE email = ? OR username = ?')) {
+        const p0 = (params[0] || '').toLowerCase();
+        const p1 = (params[1] || '').toLowerCase();
+        results = results.filter(u => 
+          (u.email || '').toLowerCase() === p0 || 
+          (u.username || '').toLowerCase() === p1
+        );
+      } else if (sql.includes('WHERE email = ?')) {
         results = results.filter(u => (u.email || '').toLowerCase() === (params[0] || '').toLowerCase());
       } else if (sql.includes('WHERE username = ?')) {
         results = results.filter(u => (u.username || '').toLowerCase() === (params[0] || '').toLowerCase());

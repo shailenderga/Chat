@@ -247,6 +247,7 @@ export default function AuthModal() {
         </div>
 
         {/* Tab Switcher (Only visible in normal Login/Register mode) */}
+        {/* Tab Switcher (Only visible in normal Login/Register mode) */}
         {!isForgot && (
           <div className="grid grid-cols-2 bg-dark-950 p-1 rounded-2xl border border-slate-800 mb-6">
             <button
@@ -261,7 +262,7 @@ export default function AuthModal() {
                 isLogin ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Sign In with Email
+              Sign In
             </button>
             <button
               type="button"
@@ -300,20 +301,20 @@ export default function AuthModal() {
         {isForgot ? (
           <div className="space-y-4">
             {forgotStep === 1 ? (
-              // Step 1 Form: Enter Registered Email
+              // Step 1 Form: Enter Registered Email or Username
               <form onSubmit={handleRequestResetCode} className="space-y-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                    Registered Email Address
+                    Registered Email or Username
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
                     <input
-                      type="email"
+                      type="text"
                       required
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="name@example.com"
+                      placeholder="name@example.com or @username"
                       className="w-full bg-dark-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500 transition"
                     />
                   </div>
@@ -537,19 +538,22 @@ export default function AuthModal() {
               </>
             )}
 
-            {/* Email input */}
+            {/* Email or Username input */}
             <div>
               <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                Email Address
+                Email Address or Username
               </label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
                 <input
-                  type="email"
+                  type="text"
                   required
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck="false"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@example.com"
+                  placeholder="name@example.com or @username"
                   className="w-full bg-dark-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500 transition"
                 />
               </div>
@@ -606,7 +610,7 @@ export default function AuthModal() {
               disabled={loading}
               className="w-full py-3 rounded-2xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition shadow-lg shadow-brand-600/30 flex items-center justify-center space-x-2"
             >
-              <span>{loading ? 'Processing...' : isLogin ? 'Sign In with Email' : 'Complete Registration'}</span>
+              <span>{loading ? 'Processing...' : isLogin ? 'Sign In' : 'Complete Registration'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
