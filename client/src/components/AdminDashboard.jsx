@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert, Users, MessageSquare, Video, Ban, Trash2,
-  Eye, RefreshCw, X, Search, CheckCircle, ArrowRight
+  Eye, RefreshCw, X, Search, CheckCircle, ArrowRight,
+  Key, UserPlus, LogIn, Check, AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -18,6 +19,29 @@ export default function AdminDashboard({ onClose }) {
   const [convoMessages, setConvoMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
+
+  // Password reset modal state
+  const [resetModal, setResetModal] = useState({
+    open: false,
+    user: null,
+    newPassword: '',
+    loading: false,
+    error: '',
+    success: ''
+  });
+
+  // Create user modal state
+  const [createModal, setCreateModal] = useState({
+    open: false,
+    name: '',
+    username: '',
+    email: '',
+    password: '',
+    role: 'user',
+    loading: false,
+    error: '',
+    success: ''
+  });
 
   useEffect(() => {
     fetchStats();
@@ -149,6 +173,94 @@ export default function AdminDashboard({ onClose }) {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!resetModal.user || !resetModal.newPassword) return;
+    if (resetModal.newPassword.length < 6) {
+      setResetModal(prev => ({ ...prev, error: 'Password must be at least 6 characters' }));
+      return;
+    }
+    setResetModal(prev => ({ ...prev, loading: true, error: '', success: '' }));
+    try {
+      const res = await fetch(`/api/admin/users/${resetModal.user.id}/password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ newPassword: resetModal.newPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to update password');
+      setResetModal(prev => ({ ...prev, success: `Password updated to '${resetModal.newPassword}' successfully!` }));
+      setTimeout(() => {
+        setResetModal({ open: false, user: null, newPassword: '', loading: false, error: '', success: '' });
+      }, 1500);
+    } catch (err) {
+      setResetModal(prev => ({ ...prev, error: err.message }));
+    } finally {
+      setResetModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleCreateUserSubmit = async (e) => {
+    e.preventDefault();
+    const { name, username, email, password, role } = createModal;
+    if (!name.trim() || !username.trim() || !email.trim() || !password) {
+      setCreateModal(prev => ({ ...prev, error: 'All fields are required' }));
+      return;
+    }
+    if (password.length < 6) {
+      setCreateModal(prev => ({ ...prev, error: 'Password must be at least 6 characters' }));
+      return;
+    }
+    setCreateModal(prev => ({ ...prev, loading: true, error: '', success: '' }));
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ name, username, email, password, role })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to create user');
+      setCreateModal(prev => ({ ...prev, success: `User @${data.user.username} created successfully!` }));
+      fetchUsers();
+      fetchStats();
+      setTimeout(() => {
+        setCreateModal({ open: false, name: '', username: '', email: '', password: '', role: 'user', loading: false, error: '', success: '' });
+      }, 1500);
+    } catch (err) {
+      setCreateModal(prev => ({ ...prev, error: err.message }));
+    } finally {
+      setCreateModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handleImpersonate = async (targetUser) => {
+    if (!window.confirm(`Switch session to @${targetUser.username} (${targetUser.email})?`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${targetUser.id}/impersonate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem('wavy_token', data.token);
+        localStorage.setItem('nexchat_token', data.token);
+        localStorage.setItem('wavy_user', JSON.stringify(data.user));
+        localStorage.setItem('nexchat_user', JSON.stringify(data.user));
+        window.location.reload();
+      } else {
+        alert(data.message || 'Failed to switch user');
+      }
+    } catch (err) {
+      alert(err.message || 'Network error');
     }
   };
 
@@ -373,18 +485,27 @@ export default function AdminDashboard({ onClose }) {
           {/* TAB 2: USER MANAGEMENT */}
           {activeTab === 'users' && (
             <div className="flex-1 flex flex-col p-6 overflow-hidden">
-              <div className="flex items-center justify-between mb-4">
-                <div className="relative w-80">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="relative w-72 sm:w-80">
                   <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
                   <input
                     type="text"
                     value={userSearch}
                     onChange={(e) => setUserSearch(e.target.value)}
                     placeholder="Search by username, email, name..."
-                    className="w-full bg-dark-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-dark-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
                   />
                 </div>
-                <div className="text-xs text-slate-400 font-mono">Showing {filteredUsers.length} users</div>
+                <div className="flex items-center space-x-3">
+                  <div className="text-xs text-slate-400 font-mono">Showing {filteredUsers.length} users</div>
+                  <button
+                    onClick={() => setCreateModal({ open: true, name: '', username: '', email: '', password: '', role: 'user', loading: false, error: '', success: '' })}
+                    className="flex items-center space-x-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-500 active:scale-95 text-white rounded-xl text-xs font-semibold shadow-md transition cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Create User</span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto border border-slate-800 rounded-2xl">
@@ -432,12 +553,28 @@ export default function AdminDashboard({ onClose }) {
                           </span>
                         </td>
                         <td className="p-3.5 text-slate-400 font-mono">{new Date(u.created_at).toLocaleDateString()}</td>
-                        <td className="p-3.5 text-right space-x-2">
+                        <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                          {u.role !== 'admin' && (
+                            <button
+                              onClick={() => handleImpersonate(u)}
+                              className="p-1.5 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/10 rounded-lg transition inline-flex items-center"
+                              title={`Login directly as @${u.username}`}
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setResetModal({ open: true, user: u, newPassword: '', loading: false, error: '', success: '' })}
+                            className="p-1.5 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition inline-flex items-center"
+                            title={`Reset Password for @${u.username}`}
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                          </button>
                           {u.role !== 'admin' && (
                             <>
                               <button
                                 onClick={() => toggleBan(u.id, u.is_banned)}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+                                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition ${
                                   u.is_banned ? 'bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30' : 'bg-amber-600/20 text-amber-300 hover:bg-amber-600/30'
                                 }`}
                               >
@@ -445,7 +582,7 @@ export default function AdminDashboard({ onClose }) {
                               </button>
                               <button
                                 onClick={() => deleteUser(u.id)}
-                                className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition"
+                                className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition inline-flex items-center"
                                 title="Delete user"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -461,6 +598,218 @@ export default function AdminDashboard({ onClose }) {
             </div>
           )}
         </div>
+
+        {/* Reset Password Modal */}
+        {resetModal.open && (
+          <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-dark-900 border border-slate-700 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-amber-400">
+                  <Key className="w-4 h-4" />
+                  <h3 className="text-sm font-bold text-white">Reset User Password</h3>
+                </div>
+                <button
+                  onClick={() => setResetModal({ open: false, user: null, newPassword: '', loading: false, error: '', success: '' })}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-300">
+                Setting new password for <span className="text-brand-400 font-semibold font-mono">@{resetModal.user?.username}</span> ({resetModal.user?.email})
+              </div>
+
+              {resetModal.error && (
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{resetModal.error}</span>
+                </div>
+              )}
+              {resetModal.success && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{resetModal.success}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    minLength={6}
+                    placeholder="Enter new password (min 6 chars)"
+                    value={resetModal.newPassword}
+                    onChange={(e) => setResetModal(prev => ({ ...prev, newPassword: e.target.value }))}
+                    className="w-full bg-dark-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                  />
+                  <div className="flex space-x-1.5 mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setResetModal(prev => ({ ...prev, newPassword: 'password123' }))}
+                      className="text-[10px] text-slate-400 hover:text-brand-400 bg-slate-800/60 px-2 py-0.5 rounded"
+                    >
+                      password123
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setResetModal(prev => ({ ...prev, newPassword: '123456' }))}
+                      className="text-[10px] text-slate-400 hover:text-brand-400 bg-slate-800/60 px-2 py-0.5 rounded"
+                    >
+                      123456
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResetModal({ open: false, user: null, newPassword: '', loading: false, error: '', success: '' })}
+                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-white rounded-xl bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resetModal.loading}
+                    className="px-4 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-xl shadow transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {resetModal.loading ? 'Updating...' : 'Set Password'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Create User Modal */}
+        {createModal.open && (
+          <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-dark-900 border border-slate-700 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-brand-400">
+                  <UserPlus className="w-4 h-4" />
+                  <h3 className="text-sm font-bold text-white">Create New User Account</h3>
+                </div>
+                <button
+                  onClick={() => setCreateModal({ open: false, name: '', username: '', email: '', password: '', role: 'user', loading: false, error: '', success: '' })}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {createModal.error && (
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{createModal.error}</span>
+                </div>
+              )}
+              {createModal.success && (
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center space-x-2">
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{createModal.success}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateUserSubmit} className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Pinki Sharma"
+                      value={createModal.name}
+                      onChange={(e) => setCreateModal(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full bg-dark-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Username handle
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. pinki"
+                      value={createModal.username}
+                      onChange={(e) => setCreateModal(prev => ({ ...prev, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '') }))}
+                      className="w-full bg-dark-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. pinki@gmail.com"
+                    value={createModal.email}
+                    onChange={(e) => setCreateModal(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full bg-dark-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Initial Password
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      minLength={6}
+                      placeholder="e.g. 123456"
+                      value={createModal.password}
+                      onChange={(e) => setCreateModal(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full bg-dark-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                      Role
+                    </label>
+                    <select
+                      value={createModal.role}
+                      onChange={(e) => setCreateModal(prev => ({ ...prev, role: e.target.value }))}
+                      className="w-full bg-dark-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCreateModal({ open: false, name: '', username: '', email: '', password: '', role: 'user', loading: false, error: '', success: '' })}
+                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-white rounded-xl bg-slate-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createModal.loading}
+                    className="px-4 py-1.5 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-500 rounded-xl shadow transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {createModal.loading ? 'Creating...' : 'Create Account'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

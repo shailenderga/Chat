@@ -31,6 +31,7 @@ export default function AuthModal() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] = useState('');
+  const [isAccountNotFound, setIsAccountNotFound] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -74,6 +75,11 @@ export default function AuthModal() {
         await login(email.trim(), password);
       } catch (err) {
         setError(err.message || 'Login failed');
+        if (err.notFound || (err.message && err.message.toLowerCase().includes('no account found'))) {
+          setIsAccountNotFound(true);
+        } else {
+          setIsAccountNotFound(false);
+        }
       } finally {
         setLoading(false);
       }
@@ -255,6 +261,7 @@ export default function AuthModal() {
               onClick={() => {
                 setIsLogin(true);
                 setError('');
+                setIsAccountNotFound(false);
                 setSuccessMsg('');
                 setShowPassword(false);
               }}
@@ -269,6 +276,7 @@ export default function AuthModal() {
               onClick={() => {
                 setIsLogin(false);
                 setError('');
+                setIsAccountNotFound(false);
                 setSuccessMsg('');
                 setShowPassword(false);
               }}
@@ -283,9 +291,29 @@ export default function AuthModal() {
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
+          <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+            <div className="flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="leading-relaxed">{error}</span>
+            </div>
+            {isAccountNotFound && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsLogin(false);
+                  setError('');
+                  setIsAccountNotFound(false);
+                  if (email && !username) {
+                    const candidate = email.split('@')[0].toLowerCase().replace(/[^a-z0-9_.]/g, '');
+                    setUsername(candidate);
+                    setName(candidate.charAt(0).toUpperCase() + candidate.slice(1));
+                  }
+                }}
+                className="mt-2.5 w-full py-2 px-3 bg-brand-600 hover:bg-brand-500 active:scale-[0.99] text-white rounded-xl font-medium transition text-center flex items-center justify-center space-x-1.5 shadow-md text-xs cursor-pointer"
+              >
+                <span>👉 Click here to Create Account with this email</span>
+              </button>
+            )}
           </div>
         )}
 

@@ -64,6 +64,9 @@ router.put('/notifications/mark-read', verifyToken, notificationController.markA
 router.get('/admin/stats', verifyToken, verifyAdmin, adminController.getSystemStats);
 router.get('/admin/users', verifyToken, verifyAdmin, adminController.getAllUsers);
 router.put('/admin/users/:userId/ban', verifyToken, verifyAdmin, adminController.toggleBanUser);
+router.put('/admin/users/:userId/password', verifyToken, verifyAdmin, adminController.resetUserPassword);
+router.post('/admin/users', verifyToken, verifyAdmin, adminController.createUserByAdmin);
+router.post('/admin/users/:userId/impersonate', verifyToken, verifyAdmin, adminController.impersonateUser);
 router.delete('/admin/users/:userId', verifyToken, verifyAdmin, adminController.deleteUser);
 router.get('/admin/conversations', verifyToken, verifyAdmin, adminController.getAllConversations);
 router.get('/admin/conversations/:conversationId/messages', verifyToken, verifyAdmin, adminController.getConversationMessages);

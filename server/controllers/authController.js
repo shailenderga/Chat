@@ -151,7 +151,10 @@ exports.login = async (req, res) => {
     );
 
     if (!users || users.length === 0) {
-      return res.status(401).json({ message: 'Invalid email/username or password' });
+      return res.status(401).json({ 
+        message: `No account found for '${email.trim()}'. Please click 'Create Account' to sign up.`,
+        notFound: true 
+      });
     }
 
     const user = users[0];
@@ -162,7 +165,7 @@ exports.login = async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Incorrect password. Please check your password or use Forgot Password.' });
     }
 
     // Update status to online (safe against missing columns)

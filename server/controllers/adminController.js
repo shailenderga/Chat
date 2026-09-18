@@ -1,4 +1,6 @@
 const db = require('../config/db');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // Get overall platform statistics
 exports.getSystemStats = async (req, res) => {
@@ -136,6 +138,122 @@ exports.getConversationMessages = async (req, res) => {
     res.json(messages || []);
   } catch (error) {
     console.error('Admin get conversation messages error:', error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+};
+
+// Admin: Reset password for any user directly
+exports.resetUserPassword = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+    }
+
+    const [target] = await db.query('SELECT id, username, email FROM users WHERE id = ?', [userId]);
+    if (!target || target.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await db.query(
+      'UPDATE users SET password_hash = ?, reset_code = NULL, reset_expires = NULL WHERE id = ?',
+      [passwordHash, userId]
+    );
+
+    res.json({
+      message: `Password for @${target[0].username} has been updated successfully`,
+      userId: target[0].id
+    });
+  } catch (error) {
+    console.error('Admin reset password error:', error);
+    res.status(500).json({ message: 'Server error resetting password: ' + error.message });
+  }
+};
+
+// Admin: Create a new user account directly from Admin Dashboard
+exports.createUserByAdmin = async (req, res) => {
+  try {
+    const { name, username, email, password, role } = req.body;
+
+    if (!name || !username || !email || !password) {
+      return res.status(400).json({ message: 'Name, username, email, and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '');
+
+    // Check duplicate
+    const [existing] = await db.query(
+      'SELECT id, email, username FROM users WHERE email = ? OR username = ?',
+      [cleanEmail, cleanUsername]
+    );
+    if (existing && existing.length > 0) {
+      return res.status(400).json({ message: 'An account with this email or username already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername}`;
+
+    const [result] = await db.query(
+      'INSERT INTO users (username, name, email, password_hash, avatar, bio, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [cleanUsername, name.trim(), cleanEmail, passwordHash, defaultAvatar, 'Hey there! I am using Wavy', role || 'user']
+    );
+
+    res.status(201).json({
+      message: `Account @${cleanUsername} created successfully`,
+      user: {
+        id: result.insertId,
+        username: cleanUsername,
+        name: name.trim(),
+        email: cleanEmail,
+        role: role || 'user',
+        avatar: defaultAvatar
+      }
+    });
+  } catch (error) {
+    console.error('Admin create user error:', error);
+    res.status(500).json({ message: 'Server error creating user: ' + error.message });
+  }
+};
+
+// Admin: Impersonate / One-click Login As User
+exports.impersonateUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const [target] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
+    if (!target || target.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const targetUser = target[0];
+    const token = jwt.sign(
+      { id: targetUser.id, username: targetUser.username, email: targetUser.email, role: targetUser.role },
+      process.env.JWT_SECRET || 'super_secret_jwt_chat_app_key_2026',
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      message: `Logged in as @${targetUser.username}`,
+      user: {
+        id: targetUser.id,
+        username: targetUser.username,
+        name: targetUser.name,
+        email: targetUser.email,
+        role: targetUser.role,
+        avatar: targetUser.avatar,
+        bio: targetUser.bio
+      },
+      token
+    });
+  } catch (error) {
+    console.error('Admin impersonate error:', error);
     res.status(500).json({ message: 'Server error: ' + error.message });
   }
 };

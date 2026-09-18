@@ -75,7 +75,9 @@ export const AuthProvider = ({ children }) => {
       throw new Error(`Server returned status ${res.status}. Please check your connection.`);
     }
     if (!res.ok) {
-      throw new Error(data?.message || 'Login failed');
+      const err = new Error(data?.message || 'Login failed');
+      err.notFound = !!data?.notFound;
+      throw err;
     }
     localStorage.setItem('wavy_token', data.token);
     localStorage.setItem('nexchat_token', data.token);
