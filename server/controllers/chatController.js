@@ -171,7 +171,7 @@ exports.getConversations = async (req, res) => {
       // Streak check
       const streakInfo = calculateStreak(c);
 
-      // Check mutual call permission
+      // Check mutual call permission (Default to allowed for connected friends unless explicitly blocked)
       const [myPerm] = await db.query(
         'SELECT audio_allowed, video_allowed FROM call_permissions WHERE user_id = ? AND target_user_id = ?',
         [userId, partner.id]
@@ -181,8 +181,13 @@ exports.getConversations = async (req, res) => {
         [partner.id, userId]
       );
 
-      const mutualAudioAllowed = Boolean(myPerm?.[0]?.audio_allowed && theirPerm?.[0]?.audio_allowed);
-      const mutualVideoAllowed = Boolean(myPerm?.[0]?.video_allowed && theirPerm?.[0]?.video_allowed);
+      const myAudioAllowed = myPerm.length === 0 ? true : Boolean(myPerm[0].audio_allowed);
+      const myVideoAllowed = myPerm.length === 0 ? true : Boolean(myPerm[0].video_allowed);
+      const theirAudioAllowed = theirPerm.length === 0 ? true : Boolean(theirPerm[0].audio_allowed);
+      const theirVideoAllowed = theirPerm.length === 0 ? true : Boolean(theirPerm[0].video_allowed);
+
+      const mutualAudioAllowed = myAudioAllowed && theirAudioAllowed;
+      const mutualVideoAllowed = myVideoAllowed && theirVideoAllowed;
 
       return {
         id: c.id,

@@ -18,11 +18,11 @@ exports.getPermissionStatus = async (req, res) => {
       [partnerId, userId]
     );
 
-    const myAudio = Boolean(myPerm?.[0]?.audio_allowed);
-    const myVideo = Boolean(myPerm?.[0]?.video_allowed);
+    const myAudio = myPerm.length === 0 ? true : Boolean(myPerm[0].audio_allowed);
+    const myVideo = myPerm.length === 0 ? true : Boolean(myPerm[0].video_allowed);
 
-    const theirAudio = Boolean(theirPerm?.[0]?.audio_allowed);
-    const theirVideo = Boolean(theirPerm?.[0]?.video_allowed);
+    const theirAudio = theirPerm.length === 0 ? true : Boolean(theirPerm[0].audio_allowed);
+    const theirVideo = theirPerm.length === 0 ? true : Boolean(theirPerm[0].video_allowed);
 
     const mutualAudioAllowed = myAudio && theirAudio;
     const mutualVideoAllowed = myVideo && theirVideo;

@@ -164,6 +164,10 @@ export const SocketProvider = ({ children }) => {
       setIncomingCall(null);
     });
 
+    newSocket.on('call_rejected', () => {
+      setIncomingCall(null);
+    });
+
     setSocket(newSocket);
 
     return () => {

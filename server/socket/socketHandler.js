@@ -145,11 +145,21 @@ module.exports = (io) => {
 
     // 5. 1-on-1 Call Signaling (WebRTC)
     socket.on('call_user', ({ toUserId, signalData, callType, fromUser, conversationId }) => {
-      io.to(`user_${toUserId}`).to(`user_${Number(toUserId)}`).emit('incoming_call', {
+      const numToId = Number(toUserId);
+      io.to(`user_${toUserId}`).to(`user_${numToId}`).emit('incoming_call', {
         signal: signalData,
         from: fromUser,
         callType, // 'audio' or 'video'
         conversationId
+      });
+
+      // Also trigger high-priority notification toast and device notification
+      io.to(`user_${toUserId}`).to(`user_${numToId}`).emit('incoming_notification', {
+        type: 'call',
+        title: `📞 Incoming ${callType === 'video' ? 'Video' : 'Audio'} Call`,
+        content: `@${fromUser?.username || 'Friend'} is calling you on Wavy!`,
+        conversationId,
+        fromUser
       });
     });
 
