@@ -243,16 +243,15 @@ export default function AuthModal() {
           <h2 className="text-2xl font-extrabold text-white tracking-tight">
             {isForgot ? 'Reset Password' : 'Wavy'}
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            {isForgot
-              ? forgotStep === 1
+          {isForgot && (
+            <p className="text-xs text-slate-400 mt-1">
+              {forgotStep === 1
                 ? 'Enter your registered email to receive a 6-digit reset code'
-                : 'Enter the 6-digit code and set your new password'
-              : 'Privacy-Protected Chat with Zoom Meetings & Streaks'}
-          </p>
+                : 'Enter the 6-digit code and set your new password'}
+            </p>
+          )}
         </div>
 
-        {/* Tab Switcher (Only visible in normal Login/Register mode) */}
         {/* Tab Switcher (Only visible in normal Login/Register mode) */}
         {!isForgot && (
           <div className="grid grid-cols-2 bg-dark-950 p-1 rounded-2xl border border-slate-800 mb-6">
