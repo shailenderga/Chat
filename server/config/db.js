@@ -256,33 +256,65 @@ async function createMySQLTables() {
     await pool.query(q);
   }
 
-  // Safe migrations for existing messages table
-  try {
-    await pool.query("ALTER TABLE messages ADD COLUMN status ENUM('sent', 'delivered', 'read') DEFAULT 'sent'");
-  } catch (e) {}
-  try {
-    await pool.query('ALTER TABLE messages ADD COLUMN is_deleted_for_everyone BOOLEAN DEFAULT FALSE');
-  } catch (e) {}
-  try {
-    await pool.query('ALTER TABLE messages ADD COLUMN deleted_for_users TEXT DEFAULT NULL');
-  } catch (e) {}
+  // Comprehensive safe column migrations for existing MySQL tables (e.g. Aiven Cloud)
+  const migrations = [
+    // Users table
+    "ALTER TABLE users ADD COLUMN role ENUM('user', 'admin') DEFAULT 'user'",
+    "ALTER TABLE users ADD COLUMN avatar VARCHAR(255) DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN bio VARCHAR(255) DEFAULT 'Hey there! I am using ChatApp'",
+    "ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE users ADD COLUMN status ENUM('online', 'offline') DEFAULT 'offline'",
+    "ALTER TABLE users ADD COLUMN last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+    "ALTER TABLE users ADD COLUMN last_seen_privacy ENUM('everyone', 'friends', 'nobody') DEFAULT 'everyone'",
+    "ALTER TABLE users ADD COLUMN story_privacy ENUM('everyone', 'friends', 'nobody') DEFAULT 'everyone'",
+    "ALTER TABLE users ADD COLUMN chat_wallpaper VARCHAR(255) DEFAULT 'default'",
+    "ALTER TABLE users ADD COLUMN reset_code VARCHAR(10) DEFAULT NULL",
+    "ALTER TABLE users ADD COLUMN reset_expires TIMESTAMP NULL DEFAULT NULL",
 
-  // Safe migrations for existing users table
-  try {
-    await pool.query("ALTER TABLE users ADD COLUMN last_seen_privacy ENUM('everyone', 'friends', 'nobody') DEFAULT 'everyone'");
-  } catch (e) {}
-  try {
-    await pool.query("ALTER TABLE users ADD COLUMN story_privacy ENUM('everyone', 'friends', 'nobody') DEFAULT 'everyone'");
-  } catch (e) {}
-  try {
-    await pool.query("ALTER TABLE users ADD COLUMN chat_wallpaper VARCHAR(255) DEFAULT 'default'");
-  } catch (e) {}
-  try {
-    await pool.query('ALTER TABLE users ADD COLUMN reset_code VARCHAR(10) DEFAULT NULL');
-  } catch (e) {}
-  try {
-    await pool.query('ALTER TABLE users ADD COLUMN reset_expires TIMESTAMP NULL DEFAULT NULL');
-  } catch (e) {}
+    // Messages table
+    "ALTER TABLE messages ADD COLUMN file_size INT DEFAULT 0",
+    "ALTER TABLE messages ADD COLUMN duration INT DEFAULT 0",
+    "ALTER TABLE messages ADD COLUMN is_ephemeral BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE messages ADD COLUMN expires_at TIMESTAMP NULL DEFAULT NULL",
+    "ALTER TABLE messages ADD COLUMN reactions TEXT DEFAULT NULL",
+    "ALTER TABLE messages ADD COLUMN status ENUM('sent', 'delivered', 'read') DEFAULT 'sent'",
+    "ALTER TABLE messages ADD COLUMN is_deleted_for_everyone BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE messages ADD COLUMN deleted_for_users TEXT DEFAULT NULL",
+
+    // Friend requests table
+    "ALTER TABLE friend_requests ADD COLUMN status ENUM('pending', 'accepted', 'rejected') DEFAULT 'pending'",
+
+    // Conversations table
+    "ALTER TABLE conversations ADD COLUMN streak_count INT DEFAULT 0",
+    "ALTER TABLE conversations ADD COLUMN last_message_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+    "ALTER TABLE conversations ADD COLUMN last_streak_date DATE DEFAULT NULL",
+
+    // Meeting rooms table
+    "ALTER TABLE meeting_rooms ADD COLUMN title VARCHAR(150) DEFAULT 'Video Meeting'",
+    "ALTER TABLE meeting_rooms ADD COLUMN is_active BOOLEAN DEFAULT TRUE",
+
+    // Stories table
+    "ALTER TABLE stories ADD COLUMN bg_gradient VARCHAR(100) DEFAULT ''",
+    "ALTER TABLE stories ADD COLUMN caption TEXT DEFAULT NULL",
+    "ALTER TABLE stories ADD COLUMN media_type ENUM('image', 'video', 'text') DEFAULT 'image'",
+    "ALTER TABLE stories ADD COLUMN media_url VARCHAR(255) DEFAULT NULL",
+
+    // Notifications table
+    "ALTER TABLE notifications ADD COLUMN metadata TEXT DEFAULT NULL",
+    "ALTER TABLE notifications ADD COLUMN is_read BOOLEAN DEFAULT FALSE",
+
+    // Call permissions table
+    "ALTER TABLE call_permissions ADD COLUMN audio_allowed BOOLEAN DEFAULT FALSE",
+    "ALTER TABLE call_permissions ADD COLUMN video_allowed BOOLEAN DEFAULT FALSE"
+  ];
+
+  for (const mig of migrations) {
+    try {
+      await pool.query(mig);
+    } catch (e) {
+      // Ignore if column already exists or table doesn't require alteration
+    }
+  }
 }
 
 async function seedDefaultAdmin() {
@@ -368,17 +400,17 @@ function handleFallbackQuery(sql, params) {
     if (sql.includes('FROM users')) {
       let results = [...fallbackStore.users];
       if (sql.includes('WHERE email = ?')) {
-        results = results.filter(u => u.email.toLowerCase() === params[0].toLowerCase());
+        results = results.filter(u => (u.email || '').toLowerCase() === (params[0] || '').toLowerCase());
       } else if (sql.includes('WHERE username = ?')) {
-        results = results.filter(u => u.username.toLowerCase() === params[0].toLowerCase());
+        results = results.filter(u => (u.username || '').toLowerCase() === (params[0] || '').toLowerCase());
       } else if (sql.includes('WHERE id = ?')) {
         results = results.filter(u => Number(u.id) === Number(params[0]));
       } else if (sql.includes('WHERE (username LIKE ? OR email LIKE ? OR name LIKE ?)')) {
-        const queryTerm = params[0].replace(/%/g, '').toLowerCase();
+        const queryTerm = (params[0] || '').replace(/%/g, '').toLowerCase();
         results = results.filter(u => 
-          u.username.toLowerCase().includes(queryTerm) ||
-          u.email.toLowerCase().includes(queryTerm) ||
-          u.name.toLowerCase().includes(queryTerm)
+          (u.username || '').toLowerCase().includes(queryTerm) ||
+          (u.email || '').toLowerCase().includes(queryTerm) ||
+          (u.name || '').toLowerCase().includes(queryTerm)
         );
       }
       return [results, null];
@@ -495,8 +527,11 @@ function handleFallbackQuery(sql, params) {
         bio: params[5] || 'Hey there! I am using ChatApp',
         role: params[6] || 'user',
         is_banned: false,
-        status: 'offline',
+        status: 'online',
         last_seen: new Date().toISOString(),
+        last_seen_privacy: 'everyone',
+        story_privacy: 'everyone',
+        chat_wallpaper: 'default',
         reset_code: null,
         reset_expires: null,
         created_at: new Date().toISOString()

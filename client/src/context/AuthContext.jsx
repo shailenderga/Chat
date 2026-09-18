@@ -66,11 +66,16 @@ export const AuthProvider = ({ children }) => {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email: email.trim(), password })
     });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      throw new Error(`Server returned status ${res.status}. Please check your connection.`);
+    }
     if (!res.ok) {
-      throw new Error(data.message || 'Login failed');
+      throw new Error(data?.message || 'Login failed');
     }
     localStorage.setItem('wavy_token', data.token);
     localStorage.setItem('nexchat_token', data.token);
@@ -88,9 +93,14 @@ export const AuthProvider = ({ children }) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData)
     });
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      throw new Error(`Server returned status ${res.status}. Please check your connection.`);
+    }
     if (!res.ok) {
-      throw new Error(data.message || 'Registration failed');
+      throw new Error(data?.message || 'Registration failed');
     }
     localStorage.setItem('wavy_token', data.token);
     localStorage.setItem('nexchat_token', data.token);

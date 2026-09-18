@@ -36,13 +36,29 @@ exports.register = async (req, res) => {
   try {
     const { name, username, email, password, avatar, bio } = req.body;
 
-    if (!name || !username || !email || !password) {
-      return res.status(400).json({ message: 'Please provide all required fields: name, username, email, and password' });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Please provide your full name' });
+    }
+
+    if (!username || !username.trim()) {
+      return res.status(400).json({ message: 'Please provide a unique username handle' });
+    }
+
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: 'Please provide an email address' });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ message: 'Please provide a valid email address' });
+    }
 
+    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '');
     if (cleanUsername.length < 3) {
       return res.status(400).json({ message: 'Username must be at least 3 characters long (letters, numbers, underscores)' });
     }
@@ -50,25 +66,46 @@ exports.register = async (req, res) => {
     // Check duplicate email
     const [existingEmail] = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
     if (existingEmail && existingEmail.length > 0) {
-      return res.status(400).json({ message: 'An account with this email already exists' });
+      return res.status(400).json({ message: 'An account with this email already exists. Please sign in or reset your password.' });
     }
 
     // Check duplicate username
     const [existingUsername] = await db.query('SELECT id FROM users WHERE username = ?', [cleanUsername]);
     if (existingUsername && existingUsername.length > 0) {
-      return res.status(400).json({ message: `The username @${cleanUsername} is already taken. Please choose another` });
+      return res.status(400).json({ message: `The username @${cleanUsername} is already taken. Please choose another username.` });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
     const defaultAvatar = avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername}`;
     const userBio = bio || 'Hey there! I am using ChatApp';
 
-    const [result] = await db.query(
-      'INSERT INTO users (username, name, email, password_hash, avatar, bio, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [cleanUsername, name.trim(), cleanEmail, passwordHash, defaultAvatar, userBio, 'user']
-    );
+    let result;
+    try {
+      [result] = await db.query(
+        'INSERT INTO users (username, name, email, password_hash, avatar, bio, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [cleanUsername, name.trim(), cleanEmail, passwordHash, defaultAvatar, userBio, 'user']
+      );
+    } catch (insertErr) {
+      // Fallback for legacy tables missing avatar, bio, or role columns
+      if (insertErr.message && (insertErr.message.includes('Unknown column') || insertErr.code === 'ER_BAD_FIELD_ERROR')) {
+        console.warn('Full insert failed due to column variation, using minimal insert fallback:', insertErr.message);
+        [result] = await db.query(
+          'INSERT INTO users (username, name, email, password_hash) VALUES (?, ?, ?, ?)',
+          [cleanUsername, name.trim(), cleanEmail, passwordHash]
+        );
+      } else {
+        throw insertErr;
+      }
+    }
 
-    const newUserId = result.insertId;
+    let newUserId = result?.insertId;
+    if (!newUserId) {
+      const [newRows] = await db.query('SELECT id FROM users WHERE email = ?', [cleanEmail]);
+      if (newRows && newRows.length > 0) {
+        newUserId = newRows[0].id;
+      }
+    }
+
     const user = {
       id: newUserId,
       username: cleanUsername,
@@ -78,7 +115,10 @@ exports.register = async (req, res) => {
       avatar: defaultAvatar,
       bio: userBio,
       is_banned: false,
-      status: 'online'
+      status: 'online',
+      last_seen_privacy: 'everyone',
+      story_privacy: 'everyone',
+      chat_wallpaper: 'default'
     };
 
     const token = generateToken(user);
@@ -120,8 +160,12 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Update status to online
-    await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['online', user.id]);
+    // Update status to online (safe against missing columns)
+    try {
+      await db.query('UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?', ['online', user.id]);
+    } catch (e) {
+      console.warn('Could not update status/last_seen on login:', e.message);
+    }
 
     const token = generateToken(user);
 
@@ -133,9 +177,9 @@ exports.login = async (req, res) => {
         username: user.username,
         name: user.name,
         email: user.email,
-        role: user.role,
-        avatar: user.avatar,
-        bio: user.bio,
+        role: user.role || 'user',
+        avatar: user.avatar || '',
+        bio: user.bio || 'Hey there! I am using ChatApp',
         status: 'online',
         last_seen_privacy: user.last_seen_privacy || 'everyone',
         story_privacy: user.story_privacy || 'everyone',
@@ -151,11 +195,40 @@ exports.login = async (req, res) => {
 // Current logged-in user
 exports.getMe = async (req, res) => {
   try {
-    const [users] = await db.query('SELECT id, username, name, email, role, avatar, bio, status, last_seen, last_seen_privacy, story_privacy, chat_wallpaper, created_at FROM users WHERE id = ?', [req.user.id]);
+    let users;
+    try {
+      [users] = await db.query(
+        'SELECT id, username, name, email, role, avatar, bio, status, last_seen, last_seen_privacy, story_privacy, chat_wallpaper, created_at FROM users WHERE id = ?',
+        [req.user.id]
+      );
+    } catch (queryErr) {
+      if (queryErr.message && (queryErr.message.includes('Unknown column') || queryErr.code === 'ER_BAD_FIELD_ERROR')) {
+        [users] = await db.query('SELECT * FROM users WHERE id = ?', [req.user.id]);
+      } else {
+        throw queryErr;
+      }
+    }
+
     if (!users || users.length === 0) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json(users[0]);
+
+    const u = users[0];
+    res.json({
+      id: u.id,
+      username: u.username,
+      name: u.name,
+      email: u.email,
+      role: u.role || 'user',
+      avatar: u.avatar || '',
+      bio: u.bio || 'Hey there! I am using ChatApp',
+      status: u.status || 'offline',
+      last_seen: u.last_seen || u.created_at,
+      last_seen_privacy: u.last_seen_privacy || 'everyone',
+      story_privacy: u.story_privacy || 'everyone',
+      chat_wallpaper: u.chat_wallpaper || 'default',
+      created_at: u.created_at
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error: ' + error.message });
   }

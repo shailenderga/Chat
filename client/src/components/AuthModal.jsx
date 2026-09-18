@@ -28,6 +28,8 @@ export default function AuthModal() {
   const [generatedCode, setGeneratedCode] = useState(null);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
+  const [showPassword, setShowPassword] = useState(false);
+
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,28 +63,60 @@ export default function AuthModal() {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
-    setLoading(true);
 
-    try {
-      if (isLogin) {
-        await login(email, password);
-      } else {
-        if (usernameStatus === 'taken') {
-          setError('Please choose a different unique username.');
-          setLoading(false);
-          return;
-        }
+    if (isLogin) {
+      if (!email.trim() || !password) {
+        setError('Please enter your email and password');
+        return;
+      }
+      setLoading(true);
+      try {
+        await login(email.trim(), password);
+      } catch (err) {
+        setError(err.message || 'Login failed');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Register validation
+      const cleanName = name.trim();
+      const cleanEmail = email.trim();
+      const cleanUname = username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '');
+
+      if (!cleanName) {
+        setError('Please enter your full name');
+        return;
+      }
+      if (!cleanUname || cleanUname.length < 3) {
+        setError('Username must be at least 3 characters (letters, numbers, underscores)');
+        return;
+      }
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        setError('Please enter a valid email address');
+        return;
+      }
+      if (!password || password.length < 6) {
+        setError('Password must be at least 6 characters long');
+        return;
+      }
+      if (usernameStatus === 'taken') {
+        setError(`@${cleanUname} is already taken. Please choose a different unique username.`);
+        return;
+      }
+
+      setLoading(true);
+      try {
         await register({
-          name,
-          username,
-          email,
+          name: cleanName,
+          username: cleanUname,
+          email: cleanEmail,
           password
         });
+      } catch (err) {
+        setError(err.message || 'Registration failed');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError(err.message || 'Authentication error');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -221,6 +255,7 @@ export default function AuthModal() {
                 setIsLogin(true);
                 setError('');
                 setSuccessMsg('');
+                setShowPassword(false);
               }}
               className={`py-2 text-xs font-semibold rounded-xl transition ${
                 isLogin ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
@@ -234,6 +269,7 @@ export default function AuthModal() {
                 setIsLogin(false);
                 setError('');
                 setSuccessMsg('');
+                setShowPassword(false);
               }}
               className={`py-2 text-xs font-semibold rounded-xl transition ${
                 !isLogin ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
@@ -458,6 +494,11 @@ export default function AuthModal() {
                     <input
                       type="text"
                       required
+                      minLength={3}
+                      maxLength={30}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck="false"
                       value={username}
                       onChange={(e) => checkUsernameAvailability(e.target.value)}
                       placeholder="e.g. aryan_dev"
@@ -480,13 +521,16 @@ export default function AuthModal() {
                   </div>
                   <div className="mt-1 text-[10px]">
                     {usernameStatus === 'available' && (
-                      <span className="text-emerald-400">✅ @{username} is available!</span>
+                      <span className="text-emerald-400 font-medium">✅ @{username} is available!</span>
                     )}
                     {usernameStatus === 'taken' && (
-                      <span className="text-red-400">❌ @{username} is already taken. Try another.</span>
+                      <span className="text-red-400 font-medium">❌ @{username} is already taken. Try another.</span>
+                    )}
+                    {usernameStatus === 'checking' && (
+                      <span className="text-slate-400">Checking availability...</span>
                     )}
                     {!usernameStatus && (
-                      <span className="text-slate-500">Every user has a strictly unique username handle.</span>
+                      <span className="text-slate-500">Min 3 chars (letters, numbers, underscores).</span>
                     )}
                   </div>
                 </div>
@@ -538,13 +582,21 @@ export default function AuthModal() {
               <div className="relative">
                 <Lock className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
+                  minLength={isLogin ? undefined : 6}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-dark-950 border border-slate-800 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500 transition"
+                  placeholder={isLogin ? '••••••••' : 'At least 6 characters'}
+                  className="w-full bg-dark-950 border border-slate-800 rounded-2xl pl-10 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500 transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-3 text-slate-500 hover:text-slate-300"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 

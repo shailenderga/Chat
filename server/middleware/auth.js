@@ -12,7 +12,17 @@ const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_chat_app_key_2026');
     
     // Check if user exists and is not banned
-    const [users] = await db.query('SELECT id, username, name, email, role, avatar, is_banned FROM users WHERE id = ?', [decoded.id]);
+    let users;
+    try {
+      [users] = await db.query('SELECT id, username, name, email, role, avatar, is_banned FROM users WHERE id = ?', [decoded.id]);
+    } catch (dbErr) {
+      if (dbErr.message && (dbErr.message.includes('Unknown column') || dbErr.code === 'ER_BAD_FIELD_ERROR')) {
+        [users] = await db.query('SELECT id, username, name, email FROM users WHERE id = ?', [decoded.id]);
+      } else {
+        throw dbErr;
+      }
+    }
+
     if (!users || users.length === 0) {
       return res.status(401).json({ message: 'User account not found' });
     }
@@ -21,7 +31,11 @@ const verifyToken = async (req, res, next) => {
       return res.status(403).json({ message: 'This account has been banned by the Administrator' });
     }
 
-    req.user = users[0];
+    req.user = {
+      ...users[0],
+      role: users[0].role || 'user',
+      avatar: users[0].avatar || ''
+    };
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired authentication token' });
