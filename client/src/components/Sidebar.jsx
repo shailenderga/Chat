@@ -31,7 +31,7 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-full bg-dark-900 border-r border-slate-800 flex flex-col h-full select-none">
+    <aside className="w-full bg-dark-900 border-r border-slate-800 flex flex-col h-full select-none min-h-0 overflow-hidden">
       {/* 24-Hour Stories Section */}
       <div className="p-3 border-b border-slate-800/80 bg-dark-950/40">
         <StoryTray />

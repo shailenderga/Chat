@@ -44,6 +44,7 @@ export default function ChatWindow({
   const [showPartnerProfile, setShowPartnerProfile] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimerRef = useRef(null);
 
@@ -172,7 +173,9 @@ export default function ChatWindow({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   const handleInputChange = (e) => {
@@ -425,7 +428,12 @@ export default function ChatWindow({
         <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           {onBack && (
             <button
-              onClick={onBack}
+              onClick={() => {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+                document.documentElement.scrollTop = 0;
+                onBack();
+              }}
               className="md:hidden p-2 -ml-1 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition flex-shrink-0"
               title="Back to chats"
             >
@@ -537,7 +545,10 @@ export default function ChatWindow({
       </div>
 
       {/* Messages List Area */}
-      <div className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 ${isCustomWallpaper ? 'bg-black/50 backdrop-blur-[2px]' : ''}`}>
+      <div 
+        ref={messagesContainerRef}
+        className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain ${isCustomWallpaper ? 'bg-black/50 backdrop-blur-[2px]' : ''}`}
+      >
         {messages.map((msg) => {
           const isMe = msg.sender_id === user.id;
 

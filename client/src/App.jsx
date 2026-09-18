@@ -182,6 +182,26 @@ export default function App() {
     }
   };
 
+  const handleBackFromChat = () => {
+    setActiveConversation(null);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+  };
+
+  const handleGoHome = () => {
+    setActiveConversation(null);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+  };
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+  }, [activeConversation]);
+
   if (loading && !user) {
     return (
       <div className="fixed inset-0 bg-dark-950 flex items-center justify-center">
@@ -196,7 +216,7 @@ export default function App() {
 
   return (
     <SecurityShield>
-      <div className="h-screen w-screen flex flex-col bg-dark-950 overflow-hidden font-sans">
+      <div className="fixed inset-0 h-[100dvh] w-full flex flex-col bg-dark-950 overflow-hidden font-sans select-none">
         {/* First-Time Device & Phone Notification Permission Prompt */}
         <NotificationPermissionPrompt />
 
@@ -206,20 +226,22 @@ export default function App() {
           onOpenRequests={() => setShowRequestsModal(true)}
         />
 
-        {/* Top Navbar */}
-        <Navbar
-          onGoHome={() => setActiveConversation(null)}
-          onOpenRequests={() => setShowRequestsModal(true)}
-          onOpenAdmin={() => setShowAdminDashboard(true)}
-          onOpenSettings={() => setShowSettingsModal(true)}
-          onSelectConversationById={handleSelectConversationById}
-          pendingRequestsCount={pendingRequestsCount}
-        />
+        {/* Top Navbar (Pinned flex-shrink-0) */}
+        <div className="flex-shrink-0 z-30 sticky top-0 w-full">
+          <Navbar
+            onGoHome={handleGoHome}
+            onOpenRequests={() => setShowRequestsModal(true)}
+            onOpenAdmin={() => setShowAdminDashboard(true)}
+            onOpenSettings={() => setShowSettingsModal(true)}
+            onSelectConversationById={handleSelectConversationById}
+            pendingRequestsCount={pendingRequestsCount}
+          />
+        </div>
 
         {/* Main Split Body: Mobile-Responsive Sidebar + Chat Area */}
-        <div className="flex-1 flex overflow-hidden relative">
+        <div className="flex-1 flex overflow-hidden relative min-h-0 w-full">
           {/* Left Sidebar (Hidden on mobile phones if chat is opened) */}
-          <div className={`${activeConversation ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 h-full`}>
+          <div className={`${activeConversation ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 h-full min-h-0 flex-col`}>
             <Sidebar
               conversations={conversations}
               activeConversation={activeConversation}
@@ -230,11 +252,11 @@ export default function App() {
           </div>
 
           {/* Right Main Chat Window (Full width on mobile phones when opened) */}
-          <div className={`${activeConversation ? 'flex' : 'hidden md:flex'} flex-1 h-full overflow-hidden`}>
+          <div className={`${activeConversation ? 'flex' : 'hidden md:flex'} flex-1 h-full min-h-0 overflow-hidden`}>
             {activeConversation ? (
               <ChatWindow
                 conversation={activeConversation}
-                onBack={() => setActiveConversation(null)}
+                onBack={handleBackFromChat}
                 onOpenCallPermission={() => setShowCallPermissionModal(true)}
                 onStartOneOnOneCall={handleStartOneOnOneCall}
                 onOpenCreateMeeting={() => setShowCreateMeetingModal(true)}

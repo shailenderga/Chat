@@ -61,7 +61,7 @@ export default function Navbar({
   };
 
   return (
-    <nav className="h-16 px-3 sm:px-6 bg-dark-900/90 border-b border-slate-800 flex items-center justify-between backdrop-blur-xl select-none z-30 relative">
+    <nav className="h-16 px-3 sm:px-6 bg-dark-900/90 border-b border-slate-800 flex items-center justify-between backdrop-blur-xl select-none z-30 relative flex-shrink-0 w-full sticky top-0">
       {/* Brand (Click to return Home) */}
       <div
         onClick={onGoHome}
