@@ -377,18 +377,30 @@ exports.forgotPassword = async (req, res) => {
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
-    // Store in database
-    await db.query(
-      'UPDATE users SET reset_code = ?, reset_expires = ? WHERE id = ?',
-      [resetCode, expiresAt, user.id]
+    // Sign a cryptographic reset token (15 mins) that is stateless and works across all serverless instances
+    const resetToken = jwt.sign(
+      { email: cleanEmail, code: resetCode },
+      process.env.JWT_SECRET || 'super_secret_jwt_chat_app_key_2026',
+      { expiresIn: '15m' }
     );
+
+    // Store in database
+    try {
+      await db.query(
+        'UPDATE users SET reset_code = ?, reset_expires = ? WHERE email = ?',
+        [resetCode, expiresAt, cleanEmail]
+      );
+    } catch (dbErr) {
+      console.warn('DB reset code update warning:', dbErr.message);
+    }
 
     console.log(`🔐 Password reset code generated for ${cleanEmail}: ${resetCode}`);
 
     return res.json({
       message: 'Verification code generated successfully',
       email: cleanEmail,
-      code: resetCode
+      code: resetCode,
+      resetToken
     });
   } catch (error) {
     console.error('Forgot password error:', error);
@@ -399,7 +411,7 @@ exports.forgotPassword = async (req, res) => {
 // Reset Password with Code
 exports.resetPassword = async (req, res) => {
   try {
-    const { email, code, newPassword } = req.body;
+    const { email, code, newPassword, resetToken } = req.body;
 
     if (!email || !code || !newPassword) {
       return res.status(400).json({ message: 'Please provide email, verification code, and new password' });
@@ -412,35 +424,55 @@ exports.resetPassword = async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanCode = String(code).trim();
 
-    const [users] = await db.query(
-      'SELECT id, email, reset_code, reset_expires FROM users WHERE email = ?',
-      [cleanEmail]
-    );
+    let isCodeValid = false;
 
-    if (!users || users.length === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const user = users[0];
-
-    if (!user.reset_code || String(user.reset_code).trim() !== cleanCode) {
-      return res.status(400).json({ message: 'Invalid verification code. Please check and try again.' });
-    }
-
-    if (user.reset_expires) {
-      const expiry = new Date(user.reset_expires);
-      if (expiry < new Date()) {
-        return res.status(400).json({ message: 'Verification code has expired. Please request a new code.' });
+    // Method A: Cryptographic JWT resetToken verification (guaranteed in serverless)
+    if (resetToken) {
+      try {
+        const decoded = jwt.verify(
+          resetToken,
+          process.env.JWT_SECRET || 'super_secret_jwt_chat_app_key_2026'
+        );
+        if (decoded && decoded.email.toLowerCase() === cleanEmail && String(decoded.code).trim() === cleanCode) {
+          isCodeValid = true;
+        }
+      } catch (jwtErr) {
+        console.warn('JWT resetToken verify warning:', jwtErr.message);
       }
+    }
+
+    // Method B: Database check
+    if (!isCodeValid) {
+      const [users] = await db.query(
+        'SELECT id, email, reset_code, reset_expires FROM users WHERE email = ?',
+        [cleanEmail]
+      );
+
+      if (!users || users.length === 0) {
+        return res.status(404).json({ message: 'No account found with this email address' });
+      }
+
+      const user = users[0];
+      if (user.reset_code && String(user.reset_code).trim() === cleanCode) {
+        if (!user.reset_expires || new Date(user.reset_expires) > new Date()) {
+          isCodeValid = true;
+        } else {
+          return res.status(400).json({ message: 'Verification code has expired. Please request a new code.' });
+        }
+      }
+    }
+
+    if (!isCodeValid) {
+      return res.status(400).json({ message: 'Invalid verification code. Please check and try again.' });
     }
 
     // Hash the new password with bcrypt
     const newHash = await bcrypt.hash(newPassword, 10);
 
-    // Update password and clear reset fields
+    // Update password and clear reset fields in database
     await db.query(
-      'UPDATE users SET password_hash = ?, reset_code = NULL, reset_expires = NULL WHERE id = ?',
-      [newHash, user.id]
+      'UPDATE users SET password_hash = ?, reset_code = NULL, reset_expires = NULL WHERE email = ?',
+      [newHash, cleanEmail]
     );
 
     console.log(`✅ Password successfully reset for user ${cleanEmail}`);

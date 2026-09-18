@@ -22,6 +22,7 @@ export default function AuthModal() {
   // Forgot password states
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
+  const [resetToken, setResetToken] = useState(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [generatedCode, setGeneratedCode] = useState(null);
@@ -110,8 +111,10 @@ export default function AuthModal() {
       }
 
       setGeneratedCode(data.code);
+      setResetToken(data.resetToken || null);
+      setResetCode(String(data.code || '')); // Auto-fill code into box!
       setForgotStep(2);
-      setSuccessMsg('Verification code generated! Please enter the code below to reset your password.');
+      setSuccessMsg('Verification code generated! Please enter your new password below.');
     } catch (err) {
       setError(err.message || 'Could not send verification code');
     } finally {
@@ -148,7 +151,8 @@ export default function AuthModal() {
         body: JSON.stringify({
           email: resetEmail.trim(),
           code: resetCode.trim(),
-          newPassword
+          newPassword,
+          resetToken
         })
       });
 
@@ -166,6 +170,7 @@ export default function AuthModal() {
         setForgotStep(1);
         setIsLogin(true);
         setGeneratedCode(null);
+        setResetToken(null);
         setResetCode('');
         setNewPassword('');
         setConfirmPassword('');
@@ -292,16 +297,25 @@ export default function AuthModal() {
               <form onSubmit={handleResetPassword} className="space-y-4">
                 {/* Instant Verification Code Display Card */}
                 {generatedCode && (
-                  <div className="p-3.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 text-xs space-y-1.5">
-                    <div className="flex items-center space-x-1.5 font-bold text-indigo-300">
-                      <Sparkles className="w-4 h-4 text-indigo-400" />
-                      <span>Your 6-Digit Verification Code</span>
+                  <div className="p-3.5 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 text-xs space-y-2">
+                    <div className="flex items-center justify-between font-bold text-indigo-300">
+                      <div className="flex items-center space-x-1.5">
+                        <Sparkles className="w-4 h-4 text-indigo-400" />
+                        <span>Your 6-Digit Verification Code</span>
+                      </div>
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">
+                        Auto-filled ✓
+                      </span>
                     </div>
-                    <div className="font-mono text-xl font-extrabold text-white tracking-widest bg-dark-950/90 px-4 py-2 rounded-xl border border-indigo-500/40 text-center select-all">
+                    <div
+                      onClick={() => setResetCode(String(generatedCode))}
+                      className="font-mono text-2xl font-extrabold text-white tracking-widest bg-dark-950/90 px-4 py-2.5 rounded-xl border border-indigo-500/40 text-center select-all cursor-pointer hover:border-brand-400 hover:bg-slate-900 transition shadow-inner"
+                      title="Click to copy / refill code"
+                    >
                       {generatedCode}
                     </div>
                     <p className="text-[10px] text-slate-400 text-center">
-                      Valid for 15 minutes. Enter this code below to set your new password.
+                      Valid for 15 minutes. Code is already auto-filled below. Just enter your new password to reset.
                     </p>
                   </div>
                 )}

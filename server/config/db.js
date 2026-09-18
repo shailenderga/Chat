@@ -643,9 +643,13 @@ function handleFallbackQuery(sql, params) {
     }
 
     if (sql.includes('users SET reset_code =')) {
-      const u = fallbackStore.users.find(usr => usr.id === params[params.length - 1] || usr.email.toLowerCase() === String(params[params.length - 1]).toLowerCase());
+      const target = params[params.length - 1];
+      const u = fallbackStore.users.find(usr => 
+        String(usr.id) === String(target) || 
+        (usr.email && usr.email.toLowerCase() === String(target).toLowerCase())
+      );
       if (u) {
-        u.reset_code = params[0];
+        u.reset_code = String(params[0]);
         u.reset_expires = params[1] || new Date(Date.now() + 15 * 60 * 1000).toISOString();
       }
       saveFallbackStore();
@@ -654,7 +658,10 @@ function handleFallbackQuery(sql, params) {
 
     if (sql.includes('users SET password_hash =')) {
       const targetVal = params[params.length - 1];
-      const u = fallbackStore.users.find(usr => usr.id === targetVal || usr.email.toLowerCase() === String(targetVal).toLowerCase());
+      const u = fallbackStore.users.find(usr => 
+        String(usr.id) === String(targetVal) || 
+        (usr.email && usr.email.toLowerCase() === String(targetVal).toLowerCase())
+      );
       if (u) {
         u.password_hash = params[0];
         u.reset_code = null;
